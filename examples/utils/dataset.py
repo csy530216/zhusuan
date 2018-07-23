@@ -16,6 +16,8 @@ import six
 from six.moves import urllib, range
 from six.moves import cPickle as pickle
 
+from scipy.sparse import csr_matrix, save_npz, load_npz
+
 
 def standardize(data_train, data_test):
     """
@@ -369,7 +371,7 @@ def load_uci_protein_data(path, dtype=np.float32):
     return x_train, y_train, x_val, y_val, x_test, y_test
 
 
-def load_uci_bow(data_name, data_path):
+def load_uci_bow(data_name, data_path, is_sparse=False):
     """
     Loads the bag-of-words dataset from UCI machine learning repository.
 
@@ -388,9 +390,12 @@ def load_uci_bow(data_name, data_path):
               '/bag-of-words/'
     vector_file = '{}.vector'.format(data_path)
     vocab_file = '{}.vocab'.format(data_path)
-    numpy_file = '{}.npy'.format(data_path)
+    if is_sparse:
+        np_file = '{}.npz'.format(data_path)
+    else:
+        np_file = '{}.npy'.format(data_path)
 
-    if not os.path.isfile(numpy_file):
+    if not os.path.isfile(np_file):
         download_dataset('{}docword.{}.txt.gz'.format(uci_url, data_name),
                          vector_file)
         with gzip.open(vector_file, 'rb') as f:
@@ -398,59 +403,30 @@ def load_uci_bow(data_name, data_path):
             V = int(f.readline())
             T = int(f.readline())
 
-            data = np.zeros((D, V), dtype=np.float32)
-            for i in range(T):
-                d, v, c = f.readline().split()
-                data[int(d)-1, int(v)-1] += int(c)
+            if is_sparse:
+                row = []
+                col = []
+                value = []
+                for i in range(T):
+                    d, v, c = f.readline().split()
+                    row.append(int(d)-1)
+                    col.append(int(v)-1)
+                    value.append(int(c))
+                data = csr_matrix((value, (row, col)), shape=[D, V], dtype=np.float32)
+                save_npz(np_file, data)
+            else:
+                data = np.zeros((D, V), dtype=np.float32)
+                for i in range(T):
+                    d, v, c = f.readline().split()
+                    data[int(d)-1, int(v)-1] += int(c)
+                np.save(np_file, data)
 
-        np.save(numpy_file, data)
         os.remove(vector_file)
     else:
-        data = np.load(numpy_file)
-
-    if not os.path.isfile(vocab_file):
-        download_dataset('{}vocab.{}.txt'.format(uci_url, data_name),
-                         vocab_file)
-
-    with open(vocab_file) as vf:
-        vocab = [v.strip() for v in vf.readlines()]
-
-    return data, vocab
-
-
-def load_uci_bow_sparse(data_name, data_path):
-    """
-    Loads the bag-of-words dataset from UCI machine learning repository.
-
-    :param data_name: Name of the dataset, e.g., nips, NYTimes.
-    :param data_path: Path to the dataset.
-
-    :return: A tuple of (X, vocab), where X is a D * V bag-of-words matrix,
-        whose each row is a document and its elements are count of each word.
-        vocab is a list of words in the vocabulary.
-    """
-    data_dir = os.path.dirname(data_path)
-    if not os.path.exists(os.path.dirname(data_path)):
-        os.makedirs(data_dir)
-
-    uci_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases' \
-              '/bag-of-words/'
-    vector_file = '{}.vector'.format(data_path)
-    vocab_file = '{}.vocab'.format(data_path)
-
-    if not os.path.isfile(vector_file):
-        download_dataset('{}docword.{}.txt.gz'.format(uci_url, data_name),
-                         vector_file)
-
-    with gzip.open(vector_file, 'rb') as f:
-        D = int(f.readline())
-        V = int(f.readline())
-        T = int(f.readline())
-        data = [[] for _ in range(D)]
-
-        for i in range(T):
-            d, v, c = f.readline().split()
-            data[int(d) - 1].append((int(v) - 1, int(c)))
+        if is_sparse:
+            data = load_npz(np_file)
+        else:
+            data = np.load(np_file)
 
     if not os.path.isfile(vocab_file):
         download_dataset('{}vocab.{}.txt'.format(uci_url, data_name),

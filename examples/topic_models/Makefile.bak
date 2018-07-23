@@ -1,0 +1,6 @@
+TF_INC=$(shell python -c 'import tensorflow as tf; print(tf.sysconfig.get_include())')
+
+all: sparse_dense_dense.so fact.so
+
+%.so: %.cc
+	$(CXX) -std=c++11 -shared $< -o $@ -fPIC -I $(TF_INC) -O3

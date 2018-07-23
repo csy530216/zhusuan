@@ -20,6 +20,9 @@ import zhusuan as zs
 
 from examples import conf
 from examples.utils import dataset
+from sdd import *
+
+from scipy.sparse import csr_matrix
 from tensorflow.python.client import timeline
 
 
@@ -37,18 +40,29 @@ def lntm(observed, n_chains, D, K, V, eta_mean, eta_logstd):
     return model
 
 
+def get_indices_and_values(X):
+    X = X.tocoo()
+    indices = np.transpose(np.array([X.row, X.col])).astype(np.int64)
+    values = X.data
+    p = np.lexsort((indices[:,1], indices[:,0]))
+    #print(p)
+    return indices[p,:], values[p]
+
+
 if __name__ == "__main__":
     tf.set_random_seed(1237)
 
     # Load nips dataset
-    data_name = 'nips'
+    data_name = 'enron'
     data_path = os.path.join(conf.data_dir, data_name + '.pkl.gz')
+    # TODO write a sparse datareader: FINISHED
     X, vocab = dataset.load_uci_bow(data_name, data_path, is_sparse=True)
-    X_train = X[:1200, :]
-    X_test = X[1200:, :]
+    X_train = X[:30000, :]
+    X_test = X[30000:, :]
+    X_test_indices, X_test_values = get_indices_and_values(X_test)
 
     # Define model training/evaluation parameters
-    D = 100
+    D = 2500
     K = 100
     V = X_train.shape[1]
     n_chains = 1
@@ -60,19 +74,15 @@ if __name__ == "__main__":
     learning_rate_0 = 1.0
     t0 = 10
 
-    # Padding
-    rem = D - X_train.shape[0] % D
-    if rem < D:
-        X_train = np.vstack((X_train, np.zeros((rem, V))))
-
-    T = np.sum(X_train)
+    T = X_train.sum()
     iters = X_train.shape[0] // D
     Eta = np.zeros((n_chains, X_train.shape[0], K), dtype=np.float32)
     Eta_mean = np.zeros(K, dtype=np.float32)
     Eta_logstd = np.zeros(K, dtype=np.float32)
 
     # Build the computation graph
-    x = tf.placeholder(tf.float32, shape=[D, V], name='x')
+    x_indices = tf.placeholder(tf.int64, shape=[None, 2], name='x_indices')
+    x_values  = tf.placeholder(tf.float32, shape=[None], name='x_value')
     eta_mean = tf.placeholder(tf.float32, shape=[K], name='eta_mean')
     eta_logstd = tf.placeholder(tf.float32, shape=[K], name='eta_logstd')
     eta = tf.Variable(tf.zeros([n_chains, D, K]), name='eta')
@@ -84,6 +94,29 @@ if __name__ == "__main__":
     D_ph = tf.placeholder(tf.int32, shape=[], name='D_ph')
     n_chains_ph = tf.placeholder(tf.int32, shape=[], name='n_chains_ph')
 
+    def sparse_tile(indices, values, dense_shape, n_rep):
+        '''
+        # TODO don't convert to dense
+        # Convert to dense
+        #dense_shape = tf.Print(dense_shape, [dense_shape, indices], 'Dense shape')
+        dense_t = tf.sparse_to_dense(indices, dense_shape, values)
+        # Tile
+        dense_t = tf.tile(dense_t, [n_rep, 1])
+        # Convert back
+        tiled_indices = tf.where(dense_t > 0)
+        tiled_values = tf.tile(values, [n_rep])
+        return tiled_indices, tiled_values
+        '''
+        tiled_indices = indices
+        i = tf.constant(1, dtype=tf.int64)
+        c = lambda idx, i: i < tf.cast(n_rep, tf.int64)
+        def b(idx, i):
+            nrow = [dense_shape[0] * i, 0]
+            tempidx = indices + nrow
+            return (tf.concat([idx, tempidx], 0), i + 1)
+        tiled_indices, _ = tf.while_loop(c, b, [tiled_indices, i])
+        return tiled_indices, tf.tile(values, [n_rep])
+
     def joint_obj(observed):
         model = lntm(observed, n_chains_ph, D_ph, K, V, eta_mean, eta_logstd)
 
@@ -93,10 +126,20 @@ if __name__ == "__main__":
         theta = tf.nn.softmax(observed['eta'])
         theta = tf.reshape(theta, [-1, K])
         phi = tf.nn.softmax(observed['beta'])
-        pred = tf.matmul(theta, phi)
-        pred = tf.reshape(pred, tf.stack([n_chains_ph, D_ph, V]))
-        x = tf.expand_dims(observed['x'], 0)
-        log_px = tf.reduce_sum(x * tf.log(pred), -1)
+
+        x_indices = observed['x_indices']
+        x_values  = observed['x_values']
+        dense_shape = tf.cast(tf.stack([D_ph, V]), tf.int64)
+        x_indices, x_values = sparse_tile(x_indices, x_values, dense_shape, n_chains_ph)
+
+        log_pred = logsdd(theta, phi, x_indices)
+        log_pred = log_pred * x_values
+        dense_shape = tf.cast(tf.stack([n_chains_ph*D_ph, V]), tf.int64)
+        #log_pred = tf.SparseTensor(indices=x_indices, values=log_pred, dense_shape=dense_shape)
+        #log_px = tf.sparse_reduce_sum(log_pred, -1)
+        log_px = tf.reduce_sum(tf.scatter_nd(x_indices, log_pred, dense_shape), -1)
+        log_px = tf.reshape(log_px, [n_chains_ph, D_ph])
+        #log_px = tf.Print(log_px, [tf.reduce_sum(lp), tf.reduce_sum(lp2), tf.reduce_sum(log_px)], 'log_px')
 
         # Shape:
         # log_p_eta, log_px: [n_chains, D]
@@ -107,11 +150,11 @@ if __name__ == "__main__":
         log_p_eta, _, log_px = joint_obj(observed)
         return log_p_eta + log_px
 
-    lp_eta, lp_beta, lp_x = joint_obj({'x': x, 'eta': eta, 'beta': beta})
+    lp_eta, lp_beta, lp_x = joint_obj({'x_indices': x_indices, 'x_values': x_values, 'eta': eta, 'beta': beta})
     log_likelihood = tf.reduce_sum(tf.reduce_mean(lp_x, axis=0), axis=0)
     log_joint = tf.reduce_sum(lp_beta) + log_likelihood
     sample_op, hmc_info = hmc.sample(
-        e_obj, observed={'x': x, 'beta': beta}, latent={'eta': eta})
+        e_obj, observed={'x_indices': x_indices, 'x_values': x_values, 'beta': beta}, latent={'eta': eta})
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
@@ -126,12 +169,13 @@ if __name__ == "__main__":
     # to be distinguished from those variables used in the training part above.
 
     _D = X_test.shape[0]
-    _T = np.sum(X_test)
+    _T = X_test.sum()
     _n_chains = 25
     _n_temperatures = 1000
 
-    _x = tf.placeholder(tf.float32, shape=[_D, V], name='x')
-    _eta = tf.Variable(tf.zeros([_n_chains, _D, K]), name='eta')
+    _x_indices = tf.placeholder(tf.int64, shape=[None, 2], name='x_indices_')
+    _x_values  = tf.placeholder(tf.float32, shape=[None], name='x_value_')
+    _eta = tf.Variable(tf.zeros([_n_chains, _D, K]), name='eta_')
 
     def _log_prior(observed):
         log_p_eta, _, _ = joint_obj(observed)
@@ -144,7 +188,7 @@ if __name__ == "__main__":
                   target_acceptance_rate=0.6)
 
     _ais = zs.evaluation.AIS(_log_prior, e_obj, _prior_samples, _hmc,
-                             observed={'x': _x, 'beta': beta},
+                             observed={'x_indices': _x_indices, 'x_values': _x_values, 'beta': beta},
                              latent={'eta': _eta},
                              n_chains=_n_chains,
                              n_temperatures=_n_temperatures)
@@ -168,15 +212,19 @@ if __name__ == "__main__":
             accs = []
             for t in range(iters):
                 x_batch = X_train[t * D: (t + 1) * D]
+                x_batch_indices, x_batch_values = get_indices_and_values(x_batch)
                 old_eta = Eta[:, t * D:(t + 1) * D, :]
+                #print(x_batch_indices)
+                #print(x_batch_values)
 
                 # E step
                 sess.run(init_eta_ph, feed_dict={eta_ph: old_eta})
                 for j in range(num_e_steps):
+                    # print(j)
                     _, new_eta, acc = sess.run(
                         [sample_op, hmc_info.samples['eta'],
                          hmc_info.acceptance_rate],
-                        feed_dict={x: x_batch.toarray(),
+                        feed_dict={x_indices: x_batch_indices, x_values: x_batch_values,
                                    eta_mean: Eta_mean,
                                    eta_logstd: Eta_logstd,
                                    D_ph: D,
@@ -190,13 +238,13 @@ if __name__ == "__main__":
                     # Create the Timeline object, and write it to a json file
                     fetched_timeline = timeline.Timeline(run_metadata.step_stats)
                     chrome_trace = fetched_timeline.generate_chrome_trace_format()
-                    with open('lntm.json', 'w') as f:
+                    with open('sparselntm.json', 'w') as f:
                         f.write(chrome_trace)
 
                 # M step
                 _, ll = sess.run(
                     [infer, log_likelihood],
-                    feed_dict={x: x_batch.toarray(),
+                    feed_dict={x_indices: x_batch_indices, x_values: x_batch_values,
                                eta_mean: Eta_mean,
                                eta_logstd: Eta_logstd,
                                learning_rate_ph: learning_rate * t0 / (
@@ -216,22 +264,6 @@ if __name__ == "__main__":
                           np.mean(accs), np.mean(Eta_mean),
                           np.mean(Eta_logstd)))
 
-        # Run AIS
-        time_ais = -time.time()
-
-        ll_lb = _ais.run(sess, feed_dict={_x: X_test.toarray(),
-                                          eta_mean: Eta_mean,
-                                          eta_logstd: Eta_logstd,
-                                          D_ph: _D,
-                                          n_chains_ph: _n_chains})
-
-        time_ais += time.time()
-
-        print('>> Test perplexity (AIS) ({:.1f}s)\n'
-              '>> loglikelihood lower bound = {}\n'
-              '>> perplexity upper bound = {}'
-              .format(time_ais, ll_lb, np.exp(-ll_lb * _D / _T)))
-
         # Output topics
         p = sess.run(phi)
         for k in range(K):
@@ -243,3 +275,19 @@ if __name__ == "__main__":
             for i in range(10):
                 sys.stdout.write(vocab[rank[i][1]] + ' ')
             sys.stdout.write('\n')
+
+        # Run AIS
+        time_ais = -time.time()
+
+        ll_lb = _ais.run(sess, feed_dict={_x_indices: X_test_indices, _x_values: X_test_values,
+                                          eta_mean: Eta_mean,
+                                          eta_logstd: Eta_logstd,
+                                          D_ph: _D,
+                                          n_chains_ph: _n_chains})
+
+        time_ais += time.time()
+
+        print('>> Test perplexity (AIS) ({:.1f}s)\n'
+              '>> loglikelihood lower bound = {}\n'
+              '>> perplexity upper bound = {}'
+              .format(time_ais, ll_lb, np.exp(-ll_lb * _D / _T)))

@@ -1,0 +1,57 @@
+#include "tensorflow/core/framework/op.h"
+#include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/shape_inference.h"
+
+using namespace tensorflow;
+
+// c = mask .* (a*b)
+REGISTER_OP("SparseDenseDense")
+    .Input("a: float32")
+    .Input("b: float32")
+    .Input("mask: bool")
+    .Output("c: float32")
+    .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+      c->set_output(0, c->input(2));
+      return Status::OK();
+    }).Doc(R"doc(
+Compute c = mask .* (a * b)
+)doc");
+
+class SparseDenseDenseOp : public OpKernel {
+ public:
+  explicit SparseDenseDenseOp(OpKernelConstruction* context) : OpKernel(context) {}
+
+  void Compute(OpKernelContext* context) override {
+    // Grab the input tensor
+    const Tensor& a    = context->input(0);
+    const Tensor& b    = context->input(1);
+    const Tensor& mask = context->input(2);
+
+    // Create an output tensor
+    Tensor* c = NULL;
+    OP_REQUIRES_OK(context, context->allocate_output(0, mask.shape(), &c));
+
+    const uint64 I = a.dim_size(0);
+    const uint64 J = b.dim_size(1);
+    const uint64 K = a.dim_size(1);
+    auto am    = a.flat<float>();
+    auto bm    = b.flat<float>();
+    auto maskm = mask.flat<bool>();
+    auto cm    = c->flat<float>();
+
+    // Set all but the first element of the output tensor to 0.
+    for (uint64 i = 0; i < I; i++)
+      for (uint64 j = 0; j < J; j++) {
+        uint64 idx = i*J+j;
+        if (maskm(idx)) {
+          float result = 0;
+          for (uint64 k = 0; k < K; k++)
+            result += am(i*K+k) * bm(k*J+j);
+          cm(idx) = result;
+        }
+      }
+  }
+};
+
+REGISTER_KERNEL_BUILDER(Name("SparseDenseDense").Device(DEVICE_CPU), SparseDenseDenseOp);
+

@@ -1,6 +1,7 @@
 #ifdef GOOGLE_CUDA
 #define EIGEN_USE_GPU
 #include "sparse_reduce_cols.h"
+//#include "tensorflow/core/util/cuda_kernel_helper.h"
 
 using namespace tensorflow;
 
@@ -10,7 +11,7 @@ const int sum_len = 256;
 const int work_per_thread = 4;
 
 __global__ void SparseReduceColsKernel(int numvals, const float *values,
-                                       const float *indices, const int64 *shape, float *sum_vec)
+                                       const long long *indices, const long long *shape, float *sum_vec)
 {
     __shared__ float sum[sum_len];
     auto threadId = blockIdx.x * blockDim.x + threadIdx.x;
@@ -41,27 +42,30 @@ __global__ void SparseReduceColsKernel(int numvals, const float *values,
             val = val_temp;
         }
     }
-    audo share_id = id - start_share;
+    auto share_id = id - start_share;
     atomicAdd(sum + share_id, val);
     auto global_start = indices[block_start_thread * 2];
-    auto global_end = indices[blockk_start_thread + sum_len * 2];
+    auto global_end = indices[block_start_thread + sum_len * 2];
     for (auto i = threadIdx.x; i < global_end - global_start; i += blockDim.x)
     {
         auto index = global_start + i;
-        if (i == 0 || index == glbobal_end - 1)
+        if (i == 0 || index == global_end - 1)
             atomicAdd(sum_vec + index, sum[i]);
         else
             sum_vec[index] = sum[i];
     }
 }
 
-void SparseReduceFunctor<GPUDevice>::operator()(GPUDevice &d, int numvals,
-                                                const float *values, const int64 *indices, const int64 *shape, float *sum_vec)
+template <typename GPUDevice>
+void SparseReduceColsFunctor<GPUDevice>::operator()(const GPUDevice &d,
+                                                    int numvals, const float *values, const long long *indices, const long long *shape, float *sum_vec)
 {
     auto threads_per_block = sum_len / work_per_thread;
     auto numblocks = (numvals + sum_len - 1) / sum_len;
     SparseReduceColsKernel<<<numblocks, threads_per_block>>>(numvals, values,
                                                              indices, shape, sum_vec);
 }
+
+template struct SparseReduceColsFunctor<GPUDevice>;
 
 #endif //GOOGLE_CUDA

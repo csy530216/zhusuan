@@ -6,7 +6,7 @@ name = "pypi"
 [packages]
 numpy = ">=1.14.0"
 six = "*"
-zhusuan = {path = ".", extras = ["examples"]}
+zhusuan = {editable = true, path = "."}
 
 [dev-packages]
 

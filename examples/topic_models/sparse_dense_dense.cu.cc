@@ -12,7 +12,7 @@ limitations under the License.
 
 #if GOOGLE_CUDA
 #define EIGEN_USE_GPU
-#include "eigen3/unsupported/Eigen/CXX11/Tensor"
+//#include "eigen3/unsupported/Eigen/CXX11/Tensor"
 
 //__global__ void AddOneKernel(const int* in, const int N, int* out) {
 //  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < N;
@@ -26,26 +26,33 @@ limitations under the License.
 //}
 
 // Define the CUDA kernel.
-__global__ void SparseDenseDenseKernel(int ncols, int nnz, 
-                const float *A, const float *B,
-                const long long *indices, float *P) {
+__global__ void SparseDenseDenseKernel(int ncols, int nnz,
+                                       const float *A, const float *B,
+                                       const long long *indices, float *P)
+{
   int jstart = ((long long)blockIdx.x) * nnz / gridDim.x;
   int jend = ((long long)(blockIdx.x + 1)) * nnz / gridDim.x;
   int tid = threadIdx.x + blockDim.x * threadIdx.y;
   int stride = blockDim.x * blockDim.y;
-  for (int j = jstart; j < jend ; j++) if (tid==0) P[j]=0;
+  for (int j = jstart; j < jend; j++)
+    if (tid == 0)
+      P[j] = 0;
   __syncthreads();
-  for (int j = jstart; j < jend ; j++) {
+  for (int j = jstart; j < jend; j++)
+  {
     float result = 0;
-    auto r = indices[j*2];
-    auto c = indices[j*2+1];
+    auto r = indices[j * 2];
+    auto c = indices[j * 2 + 1];
     for (int i = tid; i < ncols; i += stride)
-      result += A[r*ncols+i] * B[c*ncols+i];
-    for (int i = 1; i < blockDim.x; i *= 2) {
+      result += A[r * ncols + i] * B[c * ncols + i];
+    for (int i = 1; i < blockDim.x; i *= 2)
+    {
       float tmp = __shfl_down(result, i);
-      if (threadIdx.x + i < blockDim.x) result = result + tmp;
-    } 
-    if (threadIdx.x == 0) {
+      if (threadIdx.x + i < blockDim.x)
+        result = result + tmp;
+    }
+    if (threadIdx.x == 0)
+    {
       atomicAdd(&P[j], result);
       //P[j] = result;
     }
@@ -54,15 +61,15 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz,
 }
 
 // Define the GPU implementation that launches the CUDA kernel.
-void SparseDenseDenseKernelLauncher(int ncols, int nnz, 
-                const float *A, const float *B,
-                const long long *indices, float *P) {
-  dim3 blockDims(min(32,ncols), min(32, 1+(ncols-1)/64), 1);
+void SparseDenseDenseKernelLauncher(int ncols, int nnz,
+                                    const float *A, const float *B,
+                                    const long long *indices, float *P)
+{
+  dim3 blockDims(min(32, ncols), min(32, 1 + (ncols - 1) / 64), 1);
   //dim3 blockDims(32, 1, 1);
-  int nblocks = min(16384, max(1, nnz/128));
+  int nblocks = min(16384, max(1, nnz / 128));
   SparseDenseDenseKernel<<<nblocks, blockDims>>>(ncols, nnz, A, B, indices, P);
   //cout << "Finished kernel" << endl;
 }
 
 #endif
-

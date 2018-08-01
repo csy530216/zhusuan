@@ -1,6 +1,4 @@
 #include "sparse_reduce_cols.h"
-#include "tensorflow/core/framework/op.h"
-#include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/shape_inference.h"
 
 using namespace tensorflow; // NOLINT(build/namespaces)
@@ -18,9 +16,10 @@ REGISTER_OP("SparseReduceCols")
         return Status::OK();
     });*/
 
-void SparseReduceCols(int numval, const float *values, const int64 *indices,
-                      const int64 *shape, float *sum_vec);
+/*void SparseReduceCols(int numval, const float *values, const int64 *indices,
+                      const int64 *shape, float *sum_vec);*/
 
+template <typename Device>
 class SparseReduceColsOp : public OpKernel
 {
   public:
@@ -47,16 +46,18 @@ class SparseReduceColsOp : public OpKernel
         auto indices = inds.flat<int64>();
         auto out = output->flat<float>();
 
-        SparseReduceCols(num_values, values.data(), indices.data(), vec.data(),
-                         out.data());
+        SparseReduceColsFunctor<Device>()(context->eigen_device<Device>(),
+                                          num_values, values.data(),
+                                          indices.data(), vec.data(), out.data());
     }
 };
 
 // Register the GPU kernels.
 #ifdef GOOGLE_CUDA
-#define REGISTER_GPU() \
-    extern template SparseReduceColsFunctor<GPUDevice>; \
-    REGISTER_KERNEL_BUILDER(Name("SparseReduceCols").Device(Devide_GPU), \
-                        SparseReduceColsOp<GPUDevice>);
+#define REGISTER_GPU()                                                   \
+    /* It's recommended to add the code below, but not essential. */     \
+    extern template struct SparseReduceColsFunctor<GPUDevice>;           \
+    REGISTER_KERNEL_BUILDER(Name("SparseReduceCols").Device(DEVICE_GPU), \
+                            SparseReduceColsOp<GPUDevice>);
 REGISTER_GPU();
 #endif // GOOGLE_CUDA

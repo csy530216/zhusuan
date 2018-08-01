@@ -1,5 +1,6 @@
 import tensorflow as tf
 from sdd import *
+from src import *
 
 
 N = 5
@@ -26,8 +27,12 @@ ga, gb = tf.gradients(L, [a, b])
 Ld = tf.reduce_sum(masked_y * tf.log(tf.matmul(a, b)))
 gad, gbd = tf.gradients(Ld, [a, b])
 
+shape = tf.constant([5, 10], dtype=tf.int64)
+src_test = src(c, indices, shape)
+
 with tf.Session() as sess:
-    _a, _b, _mask, _ga, _gb, _gad, _gbd, _L, _Ld, _c = sess.run([a, b, mask, ga, gb, gad, gbd, L, Ld, c])
+    _a, _b, _mask, _ga, _gb, _gad, _gbd, _L, _Ld, _c, _src_test = sess.run(
+        [a, b, mask, ga, gb, gad, gbd, L, Ld, c, src_test])
     print(_a)
     print(_b)
     print(_mask)
@@ -37,3 +42,4 @@ with tf.Session() as sess:
     print(_gad)
     print(_gb)
     print(_gbd)
+    print(_src_test)

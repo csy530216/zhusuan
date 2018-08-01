@@ -21,6 +21,7 @@ import zhusuan as zs
 from examples import conf
 from examples.utils import dataset
 from sdd import *
+from src import *
 
 from scipy.sparse import csr_matrix
 from tensorflow.python.client import timeline
@@ -44,9 +45,9 @@ def get_indices_and_values(X):
     X = X.tocoo()
     indices = np.transpose(np.array([X.row, X.col])).astype(np.int64)
     values = X.data
-    p = np.lexsort((indices[:,1], indices[:,0]))
-    #print(p)
-    return indices[p,:], values[p]
+    p = np.lexsort((indices[:, 1], indices[:, 0]))
+    # print(p)
+    return indices[p, :], values[p]
 
 
 if __name__ == "__main__":
@@ -82,7 +83,7 @@ if __name__ == "__main__":
 
     # Build the computation graph
     x_indices = tf.placeholder(tf.int64, shape=[None, 2], name='x_indices')
-    x_values  = tf.placeholder(tf.float32, shape=[None], name='x_value')
+    x_values = tf.placeholder(tf.float32, shape=[None], name='x_value')
     eta_mean = tf.placeholder(tf.float32, shape=[K], name='eta_mean')
     eta_logstd = tf.placeholder(tf.float32, shape=[K], name='eta_logstd')
     eta = tf.Variable(tf.zeros([n_chains, D, K]), name='eta')
@@ -109,7 +110,9 @@ if __name__ == "__main__":
         '''
         tiled_indices = indices
         i = tf.constant(1, dtype=tf.int64)
-        c = lambda idx, i: i < tf.cast(n_rep, tf.int64)
+
+        def c(idx, i): return i < tf.cast(n_rep, tf.int64)
+
         def b(idx, i):
             nrow = [dense_shape[0] * i, 0]
             tempidx = indices + nrow
@@ -128,16 +131,19 @@ if __name__ == "__main__":
         phi = tf.nn.softmax(observed['beta'])
 
         x_indices = observed['x_indices']
-        x_values  = observed['x_values']
+        x_values = observed['x_values']
         dense_shape = tf.cast(tf.stack([D_ph, V]), tf.int64)
-        x_indices, x_values = sparse_tile(x_indices, x_values, dense_shape, n_chains_ph)
+        x_indices, x_values = sparse_tile(
+            x_indices, x_values, dense_shape, n_chains_ph)
 
         log_pred = logsdd(theta, phi, x_indices)
         log_pred = log_pred * x_values
         dense_shape = tf.cast(tf.stack([n_chains_ph*D_ph, V]), tf.int64)
         #log_pred = tf.SparseTensor(indices=x_indices, values=log_pred, dense_shape=dense_shape)
         #log_px = tf.sparse_reduce_sum(log_pred, -1)
-        log_px = tf.reduce_sum(tf.scatter_nd(x_indices, log_pred, dense_shape), -1)
+        # log_px = tf.reduce_sum(tf.scatter_nd(
+        #    x_indices, log_pred, dense_shape), -1)
+        log_px = src(log_pred, x_indices, dense_shape)
         log_px = tf.reshape(log_px, [n_chains_ph, D_ph])
         #log_px = tf.Print(log_px, [tf.reduce_sum(lp), tf.reduce_sum(lp2), tf.reduce_sum(log_px)], 'log_px')
 
@@ -150,7 +156,8 @@ if __name__ == "__main__":
         log_p_eta, _, log_px = joint_obj(observed)
         return log_p_eta + log_px
 
-    lp_eta, lp_beta, lp_x = joint_obj({'x_indices': x_indices, 'x_values': x_values, 'eta': eta, 'beta': beta})
+    lp_eta, lp_beta, lp_x = joint_obj(
+        {'x_indices': x_indices, 'x_values': x_values, 'eta': eta, 'beta': beta})
     log_likelihood = tf.reduce_sum(tf.reduce_mean(lp_x, axis=0), axis=0)
     log_joint = tf.reduce_sum(lp_beta) + log_likelihood
     sample_op, hmc_info = hmc.sample(
@@ -174,7 +181,7 @@ if __name__ == "__main__":
     _n_temperatures = 1000
 
     _x_indices = tf.placeholder(tf.int64, shape=[None, 2], name='x_indices_')
-    _x_values  = tf.placeholder(tf.float32, shape=[None], name='x_value_')
+    _x_values = tf.placeholder(tf.float32, shape=[None], name='x_value_')
     _eta = tf.Variable(tf.zeros([_n_chains, _D, K]), name='eta_')
 
     def _log_prior(observed):
@@ -182,13 +189,14 @@ if __name__ == "__main__":
         return log_p_eta
 
     _prior_samples = {'eta': lntm({}, _n_chains, _D, K, V,
-                      eta_mean, eta_logstd).outputs('eta')}
+                                  eta_mean, eta_logstd).outputs('eta')}
 
     _hmc = zs.HMC(step_size=0.01, n_leapfrogs=20, adapt_step_size=True,
                   target_acceptance_rate=0.6)
 
     _ais = zs.evaluation.AIS(_log_prior, e_obj, _prior_samples, _hmc,
-                             observed={'x_indices': _x_indices, 'x_values': _x_values, 'beta': beta},
+                             observed={'x_indices': _x_indices,
+                                       'x_values': _x_values, 'beta': beta},
                              latent={'eta': _eta},
                              n_chains=_n_chains,
                              n_temperatures=_n_temperatures)
@@ -212,10 +220,11 @@ if __name__ == "__main__":
             accs = []
             for t in range(iters):
                 x_batch = X_train[t * D: (t + 1) * D]
-                x_batch_indices, x_batch_values = get_indices_and_values(x_batch)
+                x_batch_indices, x_batch_values = get_indices_and_values(
+                    x_batch)
                 old_eta = Eta[:, t * D:(t + 1) * D, :]
-                #print(x_batch_indices)
-                #print(x_batch_values)
+                # print(x_batch_indices)
+                # print(x_batch_values)
 
                 # E step
                 sess.run(init_eta_ph, feed_dict={eta_ph: old_eta})
@@ -234,9 +243,10 @@ if __name__ == "__main__":
                     if j + 1 == num_e_steps:
                         Eta[:, t * D:(t + 1) * D, :] = new_eta
 
-                if epoch==2 and t==0:
+                if epoch == 2 and t == 0:
                     # Create the Timeline object, and write it to a json file
-                    fetched_timeline = timeline.Timeline(run_metadata.step_stats)
+                    fetched_timeline = timeline.Timeline(
+                        run_metadata.step_stats)
                     chrome_trace = fetched_timeline.generate_chrome_trace_format()
                     with open('sparselntm.json', 'w') as f:
                         f.write(chrome_trace)

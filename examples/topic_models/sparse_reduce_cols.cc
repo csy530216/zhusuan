@@ -32,7 +32,9 @@ class SparseReduceColsOp : public OpKernel
         const Tensor &inds = context->input(1);
         const Tensor &shape_input = context->input(2);
         const int64 num_values = vals.dim_size(0);
-        std::cout << "vals num: " << num_values << std::endl;
+        std::cout << "vals num: " << num_values << " "
+                  << vals.flat<float>().size() << ""
+                  << vals.NumElements() << std::endl;
 
         auto vec = shape_input.flat<int64>();
         //printf("the shape: %d", vec(0));

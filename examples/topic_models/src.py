@@ -10,7 +10,11 @@ def src(values, indices, shape):
 
 
 @ops.RegisterGradient("SparseReduceCols")
+<<<<<<< HEAD
 def _sparse_reduce_col_grad(op, grad):
+=======
+def _sparse_reduce_cols_grad(op, grad):
+>>>>>>> e9cb8b4e58fad5c335f8d3f9741cbcbd8b59610a
   indices = op.inputs[1]
 
 #  shape = op.inputs[2]

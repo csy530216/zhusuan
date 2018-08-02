@@ -1,6 +1,7 @@
 #include "sparse_reduce_cols.h"
 //#include "tensorflow/core/framework/shape_inference.h"
-#include "tensorflow/core/framework/tensor_shape.h"
+//#include "tensorflow/core/framework/tensor_shape.h"
+//#include "tensorflow/core/kernels/fill_functor.h"
 
 using namespace tensorflow; // NOLINT(build/namespaces)
 
@@ -55,10 +56,14 @@ class SparseReduceColsOp : public OpKernel
         Tensor *output = NULL;
         OP_REQUIRES_OK(context,
                        context->allocate_output(0, shape, &output));
+        //functor::SetZeroFunctor<Device, float> fill;
+        //fill(context->eigen_device<Device>(), output->flat<float>());
 
         auto values = vals.flat<float>();
         auto indices = inds.flat<int64>();
         auto out = output->flat<float>();
+        std::cout << out.data() << " " << values.data() << " "
+                  << vec.data() << std::endl;
 
         SparseReduceColsFunctor<Device>()(context->eigen_device<Device>(),
                                           num_values, values.data(),

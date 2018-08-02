@@ -13,10 +13,11 @@ const int work_per_thread = 4;
 __global__ void SparseReduceColsKernel(int numvals, const float *values,
                                        const long long *indices, const long long *shape, float *sum_vec)
 {
+    //printf("compute start\n");
     __shared__ float sum[sum_len];
     auto block_start_thread = blockIdx.x * blockDim.x;
     auto threadId = block_start_thread + threadIdx.x;
-    auto bound = numvals * 2 - 2;
+    auto bound = numvals - 1;
     auto start_idx = min(threadId * work_per_thread, bound);
     auto end_idx = min(start_idx + work_per_thread, bound);
     auto start_share = indices[block_start_thread * work_per_thread * 2];
@@ -45,9 +46,11 @@ __global__ void SparseReduceColsKernel(int numvals, const float *values,
     }
     auto share_id = id - start_share;
     atomicAdd(sum + share_id, val);
-    auto global_start = indices[block_start_thread * 2];
-    auto global_end = indices[block_start_thread + sum_len * 2];
-    for (auto i = threadIdx.x; i < global_end - global_start; i += blockDim.x)
+    //auto global_start = indices[block_start_thread * 2];
+    auto global_start = start_share;
+    auto global_end_idx = min((blockIdx.x + 1) * sum_len, numvals - 1);
+    auto global_end = indices[global_end_idx * 2];
+    for (auto i = threadIdx.x; i < sum_len; i += blockDim.x)
     {
         auto index = global_start + i;
         if (i == 0 || index == global_end - 1)

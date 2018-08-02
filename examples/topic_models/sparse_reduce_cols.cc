@@ -34,6 +34,7 @@ class SparseReduceColsOp : public OpKernel
         const int64 num_values = vals.dim_size(0);
 
         auto vec = shape_input.flat<int64>();
+        printf("the shape: %d", vec(0));
         TensorShape shape;
         OP_REQUIRES_OK(context,
                        TensorShapeUtils::MakeShape(vec.data(), 1, &shape));

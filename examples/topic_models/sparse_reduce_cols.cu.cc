@@ -50,7 +50,8 @@ __global__ void SparseReduceColsKernel(int numvals, const float *values,
     auto global_start = start_share;
     auto global_end_idx = min((blockIdx.x + 1) * sum_len, numvals - 1);
     auto global_end = indices[global_end_idx * 2];
-    for (auto i = threadIdx.x; i < sum_len; i += blockDim.x)
+    for (auto i = threadIdx.x; i < global_end - global_start + 1;
+         i += blockDim.x)
     {
         auto index = global_start + i;
         if (i == 0 || index == global_end - 1)

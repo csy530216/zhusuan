@@ -36,7 +36,7 @@ class SparseReduceColsOp : public OpKernel
         auto vec = shape_input.flat<int64>();
         TensorShape shape;
         OP_REQUIRES_OK(context,
-                       TensorShapeUtils::MakeShape(vec(0), 1, &shape));
+                       TensorShapeUtils::MakeShape(vec.data(), 1, &shape));
 
         Tensor *output = NULL;
         OP_REQUIRES_OK(context,

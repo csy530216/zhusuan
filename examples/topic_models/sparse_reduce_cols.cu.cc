@@ -15,7 +15,7 @@ __global__ void SparseReduceColsKernel(int numvals, const float *values,
 {
     __shared__ float sum[sum_len];
     auto threadId = blockIdx.x * blockDim.x + threadIdx.x;
-    auto block_start_thread = threadId & 31;
+    auto block_start_thread = threadId & (blockDim.x - 1);
     auto start_idx = threadId * work_per_thread;
     auto end_idx = min(start_idx + work_per_thread, numvals * 2 - 2);
     auto start_share = indices[block_start_thread * work_per_thread * 2];
@@ -62,6 +62,7 @@ void SparseReduceColsFunctor<GPUDevice>::operator()(const GPUDevice &d,
 {
     auto threads_per_block = sum_len / work_per_thread;
     auto numblocks = (numvals + sum_len - 1) / sum_len;
+    std::cout << "cuda kernel begin..." << std::endl;
     SparseReduceColsKernel<<<numblocks, threads_per_block>>>(numvals, values,
                                                              indices, shape, sum_vec);
 }

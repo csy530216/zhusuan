@@ -36,6 +36,7 @@ class SparseReduceColsOp : public OpKernel
                   << vals.flat<float>().size() << " "
                   << vals.NumElements() << std::endl;
         std::cout << shape_input.NumElements() << std::endl;
+        std::cout << inds.NumElements() << std::endl;
 
         //std::cout << "the shape: " << std::endl;
         auto vec = shape_input.flat<int64>();

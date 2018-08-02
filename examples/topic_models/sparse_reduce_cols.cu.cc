@@ -14,8 +14,8 @@ __global__ void SparseReduceColsKernel(int numvals, const float *values,
                                        const long long *indices, const long long *shape, float *sum_vec)
 {
     __shared__ float sum[sum_len];
-    auto threadId = blockIdx.x * blockDim.x + threadIdx.x;
-    auto block_start_thread = threadId & (blockDim.x - 1);
+    auto block_start_thread = blockIdx.x * blockDim.x;
+    auto threadId = block_start_thread + threadIdx.x;
     auto start_idx = threadId * work_per_thread;
     auto end_idx = min(start_idx + work_per_thread, numvals * 2 - 2);
     auto start_share = indices[block_start_thread * work_per_thread * 2];

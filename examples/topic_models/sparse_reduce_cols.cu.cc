@@ -54,7 +54,7 @@ __global__ void SparseReduceColsKernel(int numvals, const float *values,
          i += blockDim.x)
     {
         auto index = global_start + i;
-        if (i == 0 || index == global_end - 1)
+        if (i == 0 || index == global_end)
             atomicAdd(sum_vec + index, sum[i]);
         else
             sum_vec[index] = sum[i];

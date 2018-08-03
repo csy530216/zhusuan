@@ -108,7 +108,7 @@ __global__ void SparseReduceColsKernel(int numvals, const float *values,
     for (auto i = threadIdx.x; i < global_end - global_start + 1;
          i += blockDim.x)
     {
-        printf("sum: %f, %d, %d, %d\n", sum[i], blockIdx.x, gridDim.x, blockDim.x);
+        //printf("sum: %f, %d, %d, %d\n", sum[i], blockIdx.x, gridDim.x, blockDim.x);
         auto index = global_start + i;
         if (i == 0 || index == global_end)
             atomicAdd(sum_vec + index, sum[i]);

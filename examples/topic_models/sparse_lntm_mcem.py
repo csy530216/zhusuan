@@ -139,13 +139,16 @@ if __name__ == "__main__":
         log_pred = logsdd(theta, phi, x_indices)
         log_pred = log_pred * x_values
         dense_shape = tf.cast(tf.stack([n_chains_ph*D_ph, V]), tf.int64)
-        row_idx = [t for i, t in enumerate(x_indices) if i // 2 == 0]
-        print(row_idx.sorted())
+        z_indices = tf.reshape(x_indices, [tf.size(log_pred), 2])
+        z_indices = tf.contrib.framework.sort(z_indices, axis=0)
+        z_indices = tf.reshape(z_indices, [tf.size(log_pred) * 2])
+        #row_idx = [t for i, t in enumerate(x_indices) if i // 2 == 0]
+        # print(row_idx.sorted())
         #log_pred = tf.SparseTensor(indices=x_indices, values=log_pred, dense_shape=dense_shape)
         #log_px = tf.sparse_reduce_sum(log_pred, -1)
         # log_px = tf.reduce_sum(tf.scatter_nd(
         #    x_indices, log_pred, dense_shape), -1)
-        log_px = src(log_pred, x_indices, dense_shape)
+        log_px = src(log_pred, z_indices, dense_shape)
         log_px = tf.reshape(log_px, [n_chains_ph, D_ph])
         #log_px = tf.Print(log_px, [tf.reduce_sum(lp), tf.reduce_sum(lp2), tf.reduce_sum(log_px)], 'log_px')
 

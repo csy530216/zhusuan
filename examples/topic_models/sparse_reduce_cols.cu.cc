@@ -126,6 +126,11 @@ void SparseReduceColsFunctor<GPUDevice>::operator()(const GPUDevice &d,
     auto threads_per_block = sum_len / work_per_thread;
     auto numblocks = (numvals + sum_len - 1) / sum_len;
     std::cout << "cuda kernel begin..." << std::endl;
+    /*std::vector<long long> temp;
+    for (auto i = 0; i < numvals; ++i)
+    {
+        temp.push_back(indices[i * 2]);
+    }*/
     SparseReduceColsKernel<<<numblocks, threads_per_block>>>(numvals, values,
                                                              indices, shape, sum_vec);
 }

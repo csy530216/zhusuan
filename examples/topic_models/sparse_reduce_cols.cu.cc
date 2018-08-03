@@ -115,6 +115,8 @@ __global__ void SparseReduceColsKernel(int numvals, const float *values,
         else
             sum_vec[index] = sum[i];
     }
+    if (threadId == 0)
+        printf("sparse reduce cols complete.\n");
 }
 
 template <typename GPUDevice>

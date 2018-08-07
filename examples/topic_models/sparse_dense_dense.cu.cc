@@ -26,7 +26,7 @@ limitations under the License.
 //}
 
 // Define the CUDA kernel.
-__global__ void SparseDenseDenseKernel(int ncols, int nnz,
+/*__global__ void SparseDenseDenseKernel(int ncols, int nnz,
                                        const float *A, const float *B,
                                        const long long *indices, float *P)
 {
@@ -58,6 +58,34 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz,
     }
   }
   __syncthreads();
+}*/
+
+const int rows = 8;
+const int items = 32;
+
+__global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
+                                       const float *B, const long long *indices,
+                                       float *P)
+{
+  __shared__ int computed = 0;
+  auto block_start_thread = blockIdx.x * blockDim.x;
+  auto threadId = block_start_thread + threadIdx.x;
+  do
+  {
+    // compute gap between indices
+    auto read_items_num = 0;
+    if (block_start_thread == threadId)
+    {
+      auto start_row_idx = (items * blockIdx.x + computed) * 2;
+      auto end_row_idx = min(items * (blockIdx.x + 1), nnz) * 2;
+      read_items_num = min(rows, end_row_idx - start_row_idx) * ncols;
+    }
+    __shared__ float a_rows[ncols * items];
+    for (auto i = 0; i < read_items_num; i += blockDim.x)
+    {
+    }
+
+  } while (computed < items)
 }
 
 // Define the GPU implementation that launches the CUDA kernel.

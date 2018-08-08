@@ -67,22 +67,29 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
                                        const float *B, const long long *indices,
                                        float *P)
 {
+  // may not copy same contents to shared memory, so do not init a_rows each 
+  // loop
+  __shared__ float a_rows[ncols * items];
+  __shared__ float prdt[items];
   __shared__ int computed = 0;
-  auto block_start_thread = blockIdx.x * blockDim.x;
-  auto threadId = block_start_thread + threadIdx.x;
+  __shared__ int to_be_computed = min(items, nnz - items * blockIdx.x);
+  __shared__ int start_row_idx = indices[items * blockIdx.x * 2];
+  auto threadId = blockIdx.x * blockDim.x + threadIdx.x;
+  if (threadIdx.x < items)
+    prdt[threadId] = -1.0f;
   do
   {
     // compute gap between indices
     auto read_items_num = 0;
     if (block_start_thread == threadId)
     {
-      auto start_row_idx = (items * blockIdx.x + computed) * 2;
-      auto end_row_idx = min(items * (blockIdx.x + 1), nnz) * 2;
+      auto start_row_idx = indices[(items * blockIdx.x + computed) * 2];
+      auto end_row_idx = indices[min(items * (blockIdx.x + 1), nnz) * 2];
       read_items_num = min(rows, end_row_idx - start_row_idx) * ncols;
     }
-    __shared__ float a_rows[ncols * items];
-    for (auto i = 0; i < read_items_num; i += blockDim.x)
+    for (auto i = threadId; i < read_items_num; i += blockDim.x)
     {
+      
     }
 
   } while (computed < items)

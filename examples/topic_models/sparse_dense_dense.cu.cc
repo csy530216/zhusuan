@@ -62,37 +62,104 @@ limitations under the License.
 
 const int rows = 8;
 const int items = 32;
+const unsigned int full_mask = 0xffffffff;
+const int warp_per_block = 8;
+const int warp_size = 32;
 
 __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
                                        const float *B, const long long *indices,
                                        float *P)
 {
-  // may not copy same contents to shared memory, so do not init a_rows each 
+  // may not copy same contents to shared memory, so do not init a_rows each
   // loop
   __shared__ float a_rows[ncols * items];
   __shared__ float prdt[items];
   __shared__ int computed = 0;
   __shared__ int to_be_computed = min(items, nnz - items * blockIdx.x);
   __shared__ int start_row_idx = indices[items * blockIdx.x * 2];
+  __shared__ int end_row_idx =
+      indices[(items * blockIdx.x + to_be_computed) * 2];
+  __shared__ bool recopy = true;
+  __shared__ int num_rows = 0;
   auto threadId = blockIdx.x * blockDim.x + threadIdx.x;
   if (threadIdx.x < items)
     prdt[threadId] = -1.0f;
   do
   {
     // compute gap between indices
-    auto read_items_num = 0;
+    if (computed && threadIdx.x == 0)
+    {
+      auto temp_idx = indices[(items * blockIdx.x + computed) * 2];
+      if (temp_idx > start_row_idx)
+      {
+        start_row_idx = temp_idx;
+        recopy = true;
+      }
+      else
+      {
+        recopy = false;
+      }
+    }
+    // copy elements in A to shared memory
+    if (recopy)
+    {
+      auto start = start_row_idx * ncols;
+      auto end = (min(start_row_idx + rows, end_row_idx) + 1) * ncols;
+      if (threadIdx.x == 0)
+      {
+        num_rows = min(rows, end_row_idx - start_row_idx);
+      }
+      for (auto i = start + threadidx.x; i < end; i += blockDim.x)
+      {
+        a_rows[i - start] = A[i];
+      }
+    }
+    auto i = threadIdx.x / warp_size;
+    auto laneId = threadIdx.x & 0x1f;
+    for (auto m = computed + i; m < to_be_computed; m += warp_per_block)
+    {
+      auto offset = (items * blockIdx.x + m) * 2;
+      auto j = indices[offset];
+      auto k = indices[offset + 1];
+      if (j >= start_row_idx + num_rows)
+        break;
+      float *ma = A + j * ncols;
+      float *mb = B + k * ncols;
+      float value = 0.0f;
+      for (auto i = laneId; i < ncols; i += warp_size)
+      {
+        value += ma[i] * mb[i];
+      }
+      for (auto i = 16; i > 0; i /= 2)
+      {
+        value += __shfl_down_sync(full_mask, value, i);
+      }
+      if (laneId == 0)
+      {
+        prdt[computed + i] = values;
+      }
+    }
+    __sync_threads();
+    /*auto read_items_num = 0;
     if (block_start_thread == threadId)
     {
       auto start_row_idx = indices[(items * blockIdx.x + computed) * 2];
       auto end_row_idx = indices[min(items * (blockIdx.x + 1), nnz) * 2];
       read_items_num = min(rows, end_row_idx - start_row_idx) * ncols;
-    }
-    for (auto i = threadId; i < read_items_num; i += blockDim.x)
+    }*/
+    if (threadIdx.x < items)
     {
-      
+      auto mask = __ballot_sync(full_mask, prdt[threadIdx.x] < 0);
+      if (threadIdx.x == 0)
+      {
+        computed = __popc(mask);
+        to_be_computed -= computed;
+      }
     }
-
-  } while (computed < items)
+  } while (to_be_computed) if (threadIdx.x < computed)
+  {
+    P[items * blockIdx.x + threadIdx.x] = prdt[threadIdx.x];
+  }
 }
 
 // Define the GPU implementation that launches the CUDA kernel.

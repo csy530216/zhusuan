@@ -75,15 +75,16 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
   __shared__ float a_rows[ncols * items];
   __shared__ float prdt[items];
   __shared__ int computed = 0;
-  __shared__ int to_be_computed = min(items, nnz - items * blockIdx.x);
   __shared__ int start_row_idx = indices[items * blockIdx.x * 2];
   __shared__ int end_row_idx =
       indices[(items * blockIdx.x + to_be_computed) * 2];
   __shared__ bool recopy = true;
   __shared__ int num_rows = 0;
-  auto threadId = blockIdx.x * blockDim.x + threadIdx.x;
+  //auto threadId = blockIdx.x * blockDim.x + threadIdx.x;
+  // use register while not shared memory
+  const int to_be_computed = min(items, nnz - items * blockIdx.x);
   if (threadIdx.x < items)
-    prdt[threadId] = -1.0f;
+    prdt[threadIdx.x] = -1.0f;
   do
   {
     // compute gap between indices
@@ -153,10 +154,10 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
       if (threadIdx.x == 0)
       {
         computed = __popc(mask);
-        to_be_computed -= computed;
       }
     }
-  } while (to_be_computed) if (threadIdx.x < computed)
+  } while (computed < to_be_computed);
+  if (threadIdx.x < computed)
   {
     P[items * blockIdx.x + threadIdx.x] = prdt[threadIdx.x];
   }

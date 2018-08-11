@@ -61,6 +61,7 @@ class SparseDenseDenseOp : public OpKernel
         auto Pm = P->flat<float>();
         auto indices_m = indices.flat<int64>();
 
+        // collect data to make C++/CUDA debug more convenient.
         {
             std::string fname = "batch_data.txt";
             std::ofstream fout(fname);
@@ -68,10 +69,27 @@ class SparseDenseDenseOp : public OpKernel
             std::cout << "begin copy data..." << std::endl;
             cudaMemcpy(a_out, am.data(), am.size() * sizeof(float),
                        cudaMemcpyDefault);
+            fout << am.size() << std::endl;
             for (auto i = 0; i < am.size(); ++i)
                 fout << a_out[i] << " ";
             fout << std::endl;
             delete[] a_out;
+            float *b_out = new float[bm.size()];
+            cudaMemcpy(b_out, bm.data(), bm.size() * sizeof(float),
+                       cudaMemcpyDefault);
+            fout << bm.size() << std::endl;
+            for (auto i = 0; i < bm.size(); ++i)
+                fout << b_out[i] << " ";
+            fout << std::endl;
+            delete[] b_out;
+            long long *idx_out = new long long[indices_m.size()];
+            cudaMemcpy(idx_out, indices_m.data(),
+                       indices_m.size() * sizeof(long long), cudaMemcpyDefault);
+            fout << nnz << " " << indices_m.size() << std::endl;
+            for (auto i = 0; i < indices_m.size(); ++i)
+                fout << idx_out[i] << " ";
+            fout << std::endl;
+            delete[] idx_out;
         }
 
         SparseDenseDenseKernelLauncher(

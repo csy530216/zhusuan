@@ -11,5 +11,5 @@ all: sparse_dense_dense.so sparse_reduce_cols.so
 	g++ -std=c++11 -shared -o $@ $^ $(TF_CFLAGS) -fPIC $(CUDA_FLAGS) -lcudart $(TF_LFLAGS) -D GOOGLE_CUDA=1
 
 clean:
-	-rm *.o
+	#-rm *.o
 	-rm *.so

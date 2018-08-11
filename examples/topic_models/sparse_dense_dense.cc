@@ -12,8 +12,11 @@ limitations under the License.
 
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
+//#include "tensorflow/core/util/cuda_kernel_helper.h"
+#include <cuda_runtime.h>
+#include <fstream>
 
-using namespace tensorflow;  // NOLINT(build/namespaces)
+using namespace tensorflow; // NOLINT(build/namespaces)
 
 using CPUDevice = Eigen::ThreadPoolDevice;
 using GPUDevice = Eigen::GpuDevice;
@@ -27,43 +30,58 @@ REGISTER_OP("SparseDenseDense")
 Pj = <a[indices[j][0], :], b[indices[j][1], :]>
 )doc");
 
-void SparseDenseDenseKernelLauncher(int ncols, int nnz, 
-                  const float *A, const float *B,
-                  const int64 *indices, float *P);
+void SparseDenseDenseKernelLauncher(int ncols, int nnz,
+                                    const float *A, const float *B,
+                                    const int64 *indices, float *P);
 
 // OpKernel definition.
 // template parameter <T> is the datatype of the tensors.
-class SparseDenseDenseOp: public OpKernel {
- public:
-  explicit SparseDenseDenseOp(OpKernelConstruction* context) : OpKernel(context) {}
+class SparseDenseDenseOp : public OpKernel
+{
+  public:
+    explicit SparseDenseDenseOp(OpKernelConstruction *context) : OpKernel(context) {}
 
-  void Compute(OpKernelContext* context) override {
-    // Grab the input tensor
-    const Tensor& a    = context->input(0);
-    const Tensor& b    = context->input(1);
-    const Tensor& indices = context->input(2);
-    const int64 nnz = indices.dim_size(0);
+    void Compute(OpKernelContext *context) override
+    {
+        // Grab the input tensor
+        const Tensor &a = context->input(0);
+        const Tensor &b = context->input(1);
+        const Tensor &indices = context->input(2);
+        const int64 nnz = indices.dim_size(0);
 
-    // Create an output tensor
-    Tensor* P = NULL;
-    OP_REQUIRES_OK(context, context->allocate_output(
-                               0, TensorShape({nnz}), &P));
+        // Create an output tensor
+        Tensor *P = NULL;
+        OP_REQUIRES_OK(context, context->allocate_output(
+                                    0, TensorShape({nnz}), &P));
 
-    const uint64 K = a.dim_size(1);
+        const uint64 K = a.dim_size(1);
 
-    auto am    = a.flat<float>();
-    auto bm    = b.flat<float>();
-    auto Pm    = P->flat<float>();
-    auto indices_m = indices.flat<int64>();
+        auto am = a.flat<float>();
+        auto bm = b.flat<float>();
+        auto Pm = P->flat<float>();
+        auto indices_m = indices.flat<int64>();
 
-    SparseDenseDenseKernelLauncher(
-        K, nnz,
-        am.data(), bm.data(), 
-        indices_m.data(), Pm.data());
-  }
+        {
+            std::string fname = "batch_data.txt";
+            std::ofstream fout(fname);
+            float *a_out = new float[am.size()];
+            std::cout << "begin copy data..." << std::endl;
+            cudaMemcpy(a_out, am.data(), am.size() * sizeof(float),
+                       cudaMemcpyDefault);
+            for (auto i = 0; i < am.size(); ++i)
+                fout << a_out[i] << " ";
+            fout << std::endl;
+            delete[] a_out;
+        }
+
+        SparseDenseDenseKernelLauncher(
+            K, nnz,
+            am.data(), bm.data(),
+            indices_m.data(), Pm.data());
+    }
 };
 
 // Register the GPU kernels.
 #ifdef GOOGLE_CUDA
 REGISTER_KERNEL_BUILDER(Name("SparseDenseDense").Device(DEVICE_GPU), SparseDenseDenseOp);
-#endif  // GOOGLE_CUDA
+#endif // GOOGLE_CUDA

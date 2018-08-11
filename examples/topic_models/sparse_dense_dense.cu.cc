@@ -72,17 +72,22 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
 {
   // may not copy same contents to shared memory, so do not init a_rows each
   // loop
-  __shared__ float a_rows[ncols * items];
+  extern __shared__ float a_rows[];
   __shared__ float prdt[items];
-  __shared__ int computed = 0;
-  __shared__ int start_row_idx = indices[items * blockIdx.x * 2];
-  __shared__ int end_row_idx =
-      indices[(items * blockIdx.x + to_be_computed) * 2];
-  __shared__ bool recopy = true;
-  __shared__ int num_rows = 0;
+  __shared__ int computed;
+  __shared__ int start_row_idx;
+  __shared__ int end_row_idx;
+  __shared__ int num_rows;
   //auto threadId = blockIdx.x * blockDim.x + threadIdx.x;
   // use register while not shared memory
   const int to_be_computed = min(items, nnz - items * blockIdx.x);
+  if (threadIdx.x == 0)
+  {
+    computed = 0;
+    start_row_idx = indices[items * blockIdx.x * 2];
+    end_row_idx = indices[(items * blockIdx.x + to_be_computed) * 2];
+    num_rows = min(rows, end_row_idx - start_row_idx);
+  }
   if (threadIdx.x < items)
     prdt[threadIdx.x] = -1.0f;
   do
@@ -94,15 +99,15 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
       if (temp_idx > start_row_idx)
       {
         start_row_idx = temp_idx;
-        recopy = true;
+        num_rows = min(rows, end_row_idx - start_row_idx);
       }
       else
       {
-        recopy = false;
+        num_rows = 0;
       }
     }
     // copy elements in A to shared memory
-    if (recopy)
+    if (num_rows)
     {
       auto start = start_row_idx * ncols;
       auto end = (min(start_row_idx + rows, end_row_idx) + 1) * ncols;
@@ -110,22 +115,22 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
       {
         num_rows = min(rows, end_row_idx - start_row_idx);
       }
-      for (auto i = start + threadidx.x; i < end; i += blockDim.x)
+      for (auto i = start + threadIdx.x; i < end; i += blockDim.x)
       {
         a_rows[i - start] = A[i];
       }
     }
-    auto i = threadIdx.x / warp_size;
+    auto warpId = threadIdx.x / warp_size;
     auto laneId = threadIdx.x & 0x1f;
-    for (auto m = computed + i; m < to_be_computed; m += warp_per_block)
+    for (auto m = computed + warpId; m < to_be_computed; m += warp_per_block)
     {
       auto offset = (items * blockIdx.x + m) * 2;
       auto j = indices[offset];
       auto k = indices[offset + 1];
       if (j >= start_row_idx + num_rows)
         break;
-      float *ma = A + j * ncols;
-      float *mb = B + k * ncols;
+      const float *ma = a_rows + (j - start_row_idx) * ncols;
+      const float *mb = B + k * ncols;
       float value = 0.0f;
       for (auto i = laneId; i < ncols; i += warp_size)
       {
@@ -137,10 +142,10 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
       }
       if (laneId == 0)
       {
-        prdt[computed + i] = values;
+        prdt[m] = value;
       }
     }
-    __sync_threads();
+    __syncthreads();
     /*auto read_items_num = 0;
     if (block_start_thread == threadId)
     {
@@ -168,10 +173,14 @@ void SparseDenseDenseKernelLauncher(int ncols, int nnz,
                                     const float *A, const float *B,
                                     const long long *indices, float *P)
 {
-  dim3 blockDims(min(32, ncols), min(32, 1 + (ncols - 1) / 64), 1);
+  //dim3 blockDims(min(32, ncols), min(32, 1 + (ncols - 1) / 64), 1);
   //dim3 blockDims(32, 1, 1);
-  int nblocks = min(16384, max(1, nnz / 128));
-  SparseDenseDenseKernel<<<nblocks, blockDims>>>(ncols, nnz, A, B, indices, P);
+  //int nblocks = min(16384, max(1, nnz / 128));
+  auto threads_per_block = warp_per_block * warp_size;
+  auto num_blocks = (nnz + items - 1) / items;
+  SparseDenseDenseKernel<<<
+      num_blocks, threads_per_block, ncols * rows * sizeof(float)>>>(
+      ncols, nnz, A, B, indices, P);
   //cout << "Finished kernel" << endl;
 }
 

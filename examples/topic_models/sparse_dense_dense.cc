@@ -67,6 +67,7 @@ class SparseDenseDenseOp : public OpKernel
             std::ofstream fout(fname);
             float *a_out = new float[am.size()];
             std::cout << "begin copy data..." << std::endl;
+            fout << K << std::endl;
             cudaMemcpy(a_out, am.data(), am.size() * sizeof(float),
                        cudaMemcpyDefault);
             fout << am.size() << std::endl;
@@ -90,6 +91,7 @@ class SparseDenseDenseOp : public OpKernel
                 fout << idx_out[i] << " ";
             fout << std::endl;
             delete[] idx_out;
+            std::cout << "data copy complete." << std::endl;
         }
 
         SparseDenseDenseKernelLauncher(

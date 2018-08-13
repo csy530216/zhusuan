@@ -53,8 +53,8 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
     start_row_idx = indices[items * blockIdx.x * 2];
     end_row_idx = indices[(items * blockIdx.x + to_be_computed - 1) * 2];
     num_rows = min(rows, end_row_idx - start_row_idx + 1);
-    if (to_be_computed < items)
-      printf("%d items to be summed.\n %d start, %d end\n %d to be load\n", to_be_computed, start_row_idx, end_row_idx, num_rows);
+    /*if (to_be_computed < items)
+      printf("%d items to be summed.\n %d start, %d end\n %d to be load\n", to_be_computed, start_row_idx, end_row_idx, num_rows);*/
   }
   if (threadIdx.x < items)
     prdt[threadIdx.x] = -1.0f;

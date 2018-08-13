@@ -20,10 +20,10 @@ def _sparse_reduce_cols_grad(op, grad):
 #  scale = shape // math_ops.to_int64(output_shape_kept_dims)
 #  grad_values = array_ops.gather_nd(grad_reshaped, indices // scale)
 
-    reduced_indices = indices[:, -1]
-    grad_values = array_ops.gather_nd(grad, reduced_indices)
+#    reduced_indices = indices[:, -1]
+#    grad_values = array_ops.gather_nd(grad, reduced_indices)
 # Or:
-#  reduced_indices = indices[:, 0]
-#  grad_values = array_ops.gather(grad, reduced_indices)
+   reduced_indices = indices[:, 0]
+   grad_values = array_ops.gather(grad, reduced_indices)
 
     return [grad_values, None, None]

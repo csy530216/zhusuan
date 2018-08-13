@@ -133,6 +133,7 @@ void SparseReduceColsFunctor<GPUDevice>::operator()(const GPUDevice &d,
     }*/
     SparseReduceColsKernel<<<numblocks, threads_per_block>>>(numvals, values,
                                                              indices, shape, sum_vec);
+    std::cout << "cuda kernel src complete" << std::endl;
 }
 
 template struct SparseReduceColsFunctor<GPUDevice>;

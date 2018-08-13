@@ -33,25 +33,25 @@ class SparseReduceColsOp : public OpKernel
         const Tensor &inds = context->input(1);
         const Tensor &shape_input = context->input(2);
         const int64 num_values = vals.dim_size(0);
-        std::cout << "vals num: " << num_values << " "
+        /*std::cout << "vals num: " << num_values << " "
                   << vals.flat<float>().size() << " "
                   << vals.NumElements() << std::endl;
         std::cout << shape_input.NumElements() << std::endl;
-        std::cout << inds.NumElements() << std::endl;
+        std::cout << inds.NumElements() << std::endl;*/
 
         //std::cout << "the shape: " << std::endl;
         auto vec = shape_input.flat<int64>();
         //auto vec = shape_input.vec<int64>();
         //printf("the shape: %d", vec(0));
         //std::cout << vec(0) << std::endl;
-        std::cout << "flat complete. the shape: " << std::endl;
+        //std::cout << "flat complete. the shape: " << std::endl;
         //std::cout << vec.data() << std::endl;
-        std::cout << vec(0) << std::endl;
+        //std::cout << vec(0) << std::endl;
         TensorShape shape;
         OP_REQUIRES_OK(context,
                        TensorShapeUtils::MakeShape(vec.data(), 1,
                                                    &shape));
-        std::cout << "shape creation complete." << std::endl;
+        //std::cout << "shape creation complete." << std::endl;
 
         Tensor *output = NULL;
         OP_REQUIRES_OK(context,
@@ -62,8 +62,8 @@ class SparseReduceColsOp : public OpKernel
         auto values = vals.flat<float>();
         auto indices = inds.flat<int64>();
         auto out = output->flat<float>();
-        std::cout << out.data() << " " << values.data() << " "
-                  << vec.data() << std::endl;
+        /*std::cout << out.data() << " " << values.data() << " "
+                  << vec.data() << std::endl;*/
 
         SparseReduceColsFunctor<Device>()(context->eigen_device<Device>(),
                                           num_values, values.data(),

@@ -14,7 +14,7 @@ limitations under the License.
 #include "tensorflow/core/framework/op_kernel.h"
 //#include "tensorflow/core/util/cuda_kernel_helper.h"
 #include <cuda_runtime.h>
-#include <fstream>
+//#include <fstream>
 
 using namespace tensorflow; // NOLINT(build/namespaces)
 
@@ -62,7 +62,7 @@ class SparseDenseDenseOp : public OpKernel
         auto indices_m = indices.flat<int64>();
 
         // collect data to make C++/CUDA debug more convenient.
-        {
+        /*{
             std::string fname = "batch_data.txt";
             std::ofstream fout(fname);
             float *a_out = new float[am.size()];
@@ -92,7 +92,7 @@ class SparseDenseDenseOp : public OpKernel
             fout << std::endl;
             delete[] idx_out;
             std::cout << "data copy complete." << std::endl;
-        }
+        }*/
 
         SparseDenseDenseKernelLauncher(
             K, nnz,

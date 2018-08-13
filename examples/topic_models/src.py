@@ -12,8 +12,9 @@ def src(values, indices, shape):
 
 @ops.RegisterGradient("SparseReduceCols")
 def _sparse_reduce_cols_grad(op, grad):
+    values = op.inputs[0]
     indices = op.inputs[1]
-
+    print(values.get_shape(), indices.get_shape(), grad)
 #  shape = op.inputs[2]
 #  output_shape_kept_dims = math_ops.reduced_shape(shape, -1)
 #  grad_reshaped = array_ops.reshape(grad, output_shape_kept_dims)

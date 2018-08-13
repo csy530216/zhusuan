@@ -13,6 +13,7 @@ limitations under the License.
 #if GOOGLE_CUDA
 #define EIGEN_USE_GPU
 //#include "eigen3/unsupported/Eigen/CXX11/Tensor"
+#include <stdio.h>
 
 //__global__ void AddOneKernel(const int* in, const int N, int* out) {
 //  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < N;

@@ -2,6 +2,8 @@
 #define EIGEN_USE_GPU
 #include "sparse_reduce_cols.h"
 //#include "tensorflow/core/util/cuda_kernel_helper.h"
+#include <iostream>
+#include <stdio.h>
 
 using namespace tensorflow;
 

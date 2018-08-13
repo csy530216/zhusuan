@@ -72,7 +72,7 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
 {
   // may not copy same contents to shared memory, so do not init a_rows each
   // loop
-  extern __shared__ float a_rows[];
+  /*extern __shared__ float a_rows[];
   __shared__ float prdt[items];
   __shared__ int computed;
   __shared__ int start_row_idx;
@@ -146,13 +146,6 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
       }
     }
     __syncthreads();
-    /*auto read_items_num = 0;
-    if (block_start_thread == threadId)
-    {
-      auto start_row_idx = indices[(items * blockIdx.x + computed) * 2];
-      auto end_row_idx = indices[min(items * (blockIdx.x + 1), nnz) * 2];
-      read_items_num = min(rows, end_row_idx - start_row_idx) * ncols;
-    }*/
     if (threadIdx.x < items)
     {
       auto mask = __ballot_sync(full_mask, prdt[threadIdx.x] < 0);
@@ -161,6 +154,100 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
         computed = __popc(mask);
       }
     }
+  } while (computed < to_be_computed);
+  if (threadIdx.x < computed)
+  {
+    P[items * blockIdx.x + threadIdx.x] = prdt[threadIdx.x];
+  }*/
+  // may not copy same contents to shared memory, so do not init a_rows each
+  // loop
+  extern __shared__ float a_rows[];
+  __shared__ float prdt[items];
+  __shared__ int computed;
+  __shared__ int start_row_idx;
+  __shared__ int end_row_idx;
+  __shared__ int num_rows;
+  //auto threadId = blockIdx.x * blockDim.x + threadIdx.x;
+  // use register while not shared memory
+  //if (blockIdx.x == 6400)
+  //printf("Hi there %d\n", blockIdx.x);
+  const int to_be_computed = min(items, nnz - items * blockIdx.x);
+  if (threadIdx.x == 0)
+  {
+    computed = 0;
+    start_row_idx = indices[items * blockIdx.x * 2];
+    end_row_idx = indices[(items * blockIdx.x + to_be_computed - 1) * 2];
+    num_rows = min(rows, end_row_idx - start_row_idx + 1);
+    if (to_be_computed < items)
+      printf("%d items to be summed.\n %d start, %d end\n %d to be load\n", to_be_computed, start_row_idx, end_row_idx, num_rows);
+  }
+  if (threadIdx.x < items)
+    prdt[threadIdx.x] = -1.0f;
+  __syncthreads();
+  do
+  {
+    // compute gap between indices
+    if (computed && threadIdx.x == 0)
+    {
+      auto temp_idx = indices[(items * blockIdx.x + computed) * 2];
+      if (temp_idx > start_row_idx)
+      {
+        start_row_idx = temp_idx;
+        num_rows = min(rows, end_row_idx - start_row_idx + 1);
+      }
+      else
+      {
+        num_rows = 0;
+      }
+    }
+    __syncthreads();
+    // copy elements in A to shared memory
+    if (num_rows)
+    {
+      auto start = start_row_idx * ncols;
+      auto end = (start_row_idx + num_rows) * ncols;
+      for (auto i = start + threadIdx.x; i < end; i += blockDim.x)
+      {
+        a_rows[i - start] = A[i];
+      }
+    }
+    __syncthreads();
+    auto warpId = threadIdx.x / warp_size;
+    auto laneId = threadIdx.x & 0x1f;
+    for (auto m = computed + warpId; m < to_be_computed; m +=
+                                                         warp_per_block)
+    {
+      auto offset = (items * blockIdx.x + m) * 2;
+      auto j = indices[offset];
+      auto k = indices[offset + 1];
+      if (j >= start_row_idx + num_rows)
+        break;
+      const float *ma = a_rows + (j - start_row_idx) * ncols;
+      const float *mb = B + k * ncols;
+      float value = 0.0f;
+      for (auto i = laneId; i < ncols; i += warp_size)
+      {
+        value += ma[i] * mb[i];
+      }
+      for (auto i = 16; i > 0; i /= 2)
+      {
+        value += __shfl_down_sync(full_mask, value, i);
+      }
+      if (laneId == 0)
+      {
+        prdt[m] = value;
+      }
+    }
+    __syncthreads();
+    if (threadIdx.x < items)
+    {
+      auto mask = __ballot_sync(full_mask, prdt[threadIdx.x] >= 0);
+      if (threadIdx.x == 0)
+      {
+        computed = __popc(mask);
+      }
+    }
+    __syncthreads();
   } while (computed < to_be_computed);
   if (threadIdx.x < computed)
   {

@@ -52,6 +52,7 @@ def get_indices_and_values(X):
 
 if __name__ == "__main__":
     tf.set_random_seed(1237)
+    np.random.seed(2345)
 
     # Load nips dataset
     data_name = 'enron'

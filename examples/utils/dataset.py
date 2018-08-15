@@ -402,6 +402,7 @@ def load_uci_bow(data_name, data_path, is_sparse=False):
             D = int(f.readline())
             V = int(f.readline())
             T = int(f.readline())
+            print("D={}, V={}, T={}".format(D, V, T))
 
             if is_sparse:
                 row = []

@@ -34,7 +34,7 @@ __global__ void SparseReduceColsKernel(int numvals, const float *values,
         if (offset >= block_end_offset)
             break;
         auto id_temp = indices[offset * 2];
-        auto val_temp = indices[offset];
+        auto val_temp = values[offset];
         if (id == -1)
         {
             id = id_temp;

@@ -2,7 +2,7 @@
 #define EIGEN_USE_GPU
 #include "sparse_reduce_cols.h"
 //#include "tensorflow/core/util/cuda_kernel_helper.h"
-//#include <iostream>
+#include <iostream>
 //#include <stdio.h>
 
 using namespace tensorflow;
@@ -83,6 +83,8 @@ void SparseReduceColsFunctor<GPUDevice>::operator()(const GPUDevice &d,
     {
         temp.push_back(indices[i * 2]);
     }*/
+    std::cout << "in sparse reduce cols: " << shape[0] << " "
+              << shape[1] << std::endl;
     SparseReduceColsKernel<<<numblocks, threads_per_block>>>(numvals, values,
                                                              indices, shape, sum_vec);
     //std::cout << "cuda kernel src complete" << std::endl;

@@ -28,7 +28,7 @@ __global__ void SparseReduceColsKernel(int numvals, const float *values,
         block_start_offset + threadIdx.x * work_per_thread;
     auto id = -1;
     auto val = 0.0f;
-    for (auto i = threadIdx.x; i < work_per_thread; ++i)
+    for (auto i = 0; i < work_per_thread; ++i)
     {
         auto offset = thread_start_offset + i;
         if (offset >= block_end_offset)

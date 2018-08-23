@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
     # Build the computation graph
     x_indices = tf.placeholder(tf.int64, shape=[None, 2], name='x_indices')
-    x_values = tf.placeholder(tf.float32, shape=[None], name='x_value')
+    x_values = tf.placeholder(tf.float32, shape=[None], name='x_values')
     eta_mean = tf.placeholder(tf.float32, shape=[K], name='eta_mean')
     eta_logstd = tf.placeholder(tf.float32, shape=[K], name='eta_logstd')
     eta = tf.Variable(tf.zeros([n_chains, D, K]), name='eta')
@@ -186,7 +186,7 @@ if __name__ == "__main__":
     _n_temperatures = 1000
 
     _x_indices = tf.placeholder(tf.int64, shape=[None, 2], name='x_indices_')
-    _x_values = tf.placeholder(tf.float32, shape=[None], name='x_value_')
+    _x_values = tf.placeholder(tf.float32, shape=[None], name='x_values_')
     _eta = tf.Variable(tf.zeros([_n_chains, _D, K]), name='eta_')
 
     def _log_prior(observed):

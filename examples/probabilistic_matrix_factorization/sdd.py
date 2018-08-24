@@ -22,9 +22,8 @@ def _sparse_dense_dense_grad(op, grad):
   result_shape = tf.cast(tf.stack([tf.shape(a)[0], tf.shape(b)[0]]), dtype=dtypes.int64)
   grad = tf.SparseTensor(indices=indices, values=grad, dense_shape=result_shape)
 
-  grad_T      = sparse_ops.sparse_transpose(grad)
   grad_a      = sparse_ops.sparse_tensor_dense_matmul(grad, b)
-  grad_b      = sparse_ops.sparse_tensor_dense_matmul(grad_T, a)
+  grad_b      = sparse_ops.sparse_tensor_dense_matmul(grad, a, adjoint_a=True)
   return [grad_a, grad_b, None] 
 
 

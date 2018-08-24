@@ -136,6 +136,9 @@ def main():
         latent={'v': V})
 
     with tf.Session() as sess:
+        from tensorflow.python.client import timeline
+        options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        run_metadata = tf.RunMetadata()
         sess.run(tf.global_variables_initializer())
 
         for epoch in range(1, epochs + 1):
@@ -143,9 +146,9 @@ def main():
             feed_dict = {r_indices: R_train_indices,
                          r_values: R_train_values}
             _, acc_u = sess.run([sample_u_op, sample_u_info.acceptance_rate],
-                                feed_dict=feed_dict)
+                                feed_dict=feed_dict, options=options, run_metadata=run_metadata)
             _, acc_v = sess.run([sample_v_op, sample_v_info.acceptance_rate],
-                                feed_dict=feed_dict)
+                                feed_dict=feed_dict, options=options, run_metadata=run_metadata)
             epoch_time += time.time()
             time_train = -time.time()
             train_rmse = sess.run(rmse, feed_dict=feed_dict)
@@ -154,13 +157,20 @@ def main():
             print('Epoch {}({:.1f}s): rmse ({:.1f}s) = {}'
                   .format(epoch, epoch_time, time_train, train_rmse))
 
+            if epoch == 3:
+                # Create the Timeline object, and write it to a json file
+                fetched_timeline = timeline.Timeline(run_metadata.step_stats)
+                chrome_trace = fetched_timeline.generate_chrome_trace_format()
+                with open('sparsepmf.json', 'w') as f:
+                    f.write(chrome_trace)
+
             if epoch % valid_freq == 0:
-                valid_rmse = sess.run(rmse, feed_dict={R_valid_indices, R_valid_values})
+                valid_rmse = sess.run(rmse, feed_dict={r_indices: R_valid_indices, r_values: R_valid_values})
                 print('>>> VALID')
                 print('>> Valid rmse = {}'.format(valid_rmse))
 
             if epoch % test_freq == 0:
-                valid_rmse = sess.run(rmse, feed_dict={R_test_indices, R_test_values})
+                test_rmse = sess.run(rmse, feed_dict={r_indices: R_test_indices, r_values: R_test_values})
                 print('>>> TEST')
                 print('>> Test rmse = {}'.format(test_rmse))
 

@@ -24,7 +24,7 @@ from sdd import *
 from src import *
 
 from scipy.sparse import csr_matrix
-from tensorflow.python.client import timeline
+#from tensorflow.python.client import timeline
 
 
 # corresponding to eta in LDA. Larger log_delta leads to sparser topic.
@@ -52,6 +52,7 @@ def get_indices_and_values(X):
 
 if __name__ == "__main__":
     tf.set_random_seed(1237)
+    np.random.seed(2345)
 
     # Load nips dataset
     data_name = 'enron'
@@ -71,7 +72,7 @@ if __name__ == "__main__":
     num_e_steps = 5
     hmc = zs.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True,
                  target_acceptance_rate=0.6)
-    epochs = 100
+    epochs = 60
     learning_rate_0 = 1.0
     t0 = 10
 
@@ -83,7 +84,7 @@ if __name__ == "__main__":
 
     # Build the computation graph
     x_indices = tf.placeholder(tf.int64, shape=[None, 2], name='x_indices')
-    x_values = tf.placeholder(tf.float32, shape=[None], name='x_value')
+    x_values = tf.placeholder(tf.float32, shape=[None], name='x_values')
     eta_mean = tf.placeholder(tf.float32, shape=[K], name='eta_mean')
     eta_logstd = tf.placeholder(tf.float32, shape=[K], name='eta_logstd')
     eta = tf.Variable(tf.zeros([n_chains, D, K]), name='eta')
@@ -146,8 +147,7 @@ if __name__ == "__main__":
         # print(row_idx.sorted())
         #log_pred = tf.SparseTensor(indices=x_indices, values=log_pred, dense_shape=dense_shape)
         #log_px = tf.sparse_reduce_sum(log_pred, -1)
-        # log_px = tf.reduce_sum(tf.scatter_nd(
-        #    x_indices, log_pred, dense_shape), -1)
+        #log_px = tf.reduce_sum(tf.scatter_nd(x_indices, log_pred, dense_shape), -1)
         log_px = src(log_pred, x_indices, dense_shape)
         log_px = tf.reshape(log_px, [n_chains_ph, D_ph])
         #log_px = tf.Print(log_px, [tf.reduce_sum(lp), tf.reduce_sum(lp2), tf.reduce_sum(log_px)], 'log_px')
@@ -186,7 +186,7 @@ if __name__ == "__main__":
     _n_temperatures = 1000
 
     _x_indices = tf.placeholder(tf.int64, shape=[None, 2], name='x_indices_')
-    _x_values = tf.placeholder(tf.float32, shape=[None], name='x_value_')
+    _x_values = tf.placeholder(tf.float32, shape=[None], name='x_values_')
     _eta = tf.Variable(tf.zeros([_n_chains, _D, K]), name='eta_')
 
     def _log_prior(observed):
@@ -210,8 +210,8 @@ if __name__ == "__main__":
 
     # Run the inference
     with tf.Session() as sess:
-        options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        run_metadata = tf.RunMetadata()
+        #options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        #run_metadata = tf.RunMetadata()
         sess.run(tf.global_variables_initializer())
 
         for epoch in range(1, epochs + 1):
@@ -242,19 +242,18 @@ if __name__ == "__main__":
                                    eta_mean: Eta_mean,
                                    eta_logstd: Eta_logstd,
                                    D_ph: D,
-                                   n_chains_ph: n_chains}, options=options, run_metadata=run_metadata)
+                                   n_chains_ph: n_chains})#, options=options, run_metadata=run_metadata)
                     accs.append(acc)
                     # Store eta for the persistent chain
                     if j + 1 == num_e_steps:
                         Eta[:, t * D:(t + 1) * D, :] = new_eta
 
-                if epoch == 2 and t == 0:
-                    # Create the Timeline object, and write it to a json file
-                    fetched_timeline = timeline.Timeline(
-                        run_metadata.step_stats)
-                    chrome_trace = fetched_timeline.generate_chrome_trace_format()
-                    with open('sparselntm.json', 'w') as f:
-                        f.write(chrome_trace)
+                #if epoch == 2 and t == 0:
+                #    # Create the Timeline object, and write it to a json file
+                #    fetched_timeline = timeline.Timeline(run_metadata.step_stats)
+                #    chrome_trace = fetched_timeline.generate_chrome_trace_format()
+                #    with open('sparselntm.json', 'w') as f:
+                #        f.write(chrome_trace)
 
                 # M step
                 _, ll = sess.run(

@@ -20,7 +20,7 @@ import zhusuan as zs
 
 from examples import conf
 from examples.utils import dataset
-from tensorflow.python.client import timeline
+#from tensorflow.python.client import timeline
 
 
 # corresponding to eta in LDA. Larger log_delta leads to sparser topic.
@@ -39,6 +39,7 @@ def lntm(observed, n_chains, D, K, V, eta_mean, eta_logstd):
 
 if __name__ == "__main__":
     tf.set_random_seed(1237)
+    np.random.seed(2345)
 
     # Load nips dataset
     data_name = 'nips'
@@ -153,8 +154,8 @@ if __name__ == "__main__":
 
     # Run the inference
     with tf.Session() as sess:
-        options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        run_metadata = tf.RunMetadata()
+        #options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        #run_metadata = tf.RunMetadata()
         sess.run(tf.global_variables_initializer())
 
         for epoch in range(1, epochs + 1):
@@ -180,18 +181,18 @@ if __name__ == "__main__":
                                    eta_mean: Eta_mean,
                                    eta_logstd: Eta_logstd,
                                    D_ph: D,
-                                   n_chains_ph: n_chains}, options=options, run_metadata=run_metadata)
+                                   n_chains_ph: n_chains})#, options=options, run_metadata=run_metadata)
                     accs.append(acc)
                     # Store eta for the persistent chain
                     if j + 1 == num_e_steps:
                         Eta[:, t * D:(t + 1) * D, :] = new_eta
 
-                if epoch==2 and t==0:
-                    # Create the Timeline object, and write it to a json file
-                    fetched_timeline = timeline.Timeline(run_metadata.step_stats)
-                    chrome_trace = fetched_timeline.generate_chrome_trace_format()
-                    with open('lntm.json', 'w') as f:
-                        f.write(chrome_trace)
+                #if epoch == 2 and t == 0:
+                #    # Create the Timeline object, and write it to a json file
+                #    fetched_timeline = timeline.Timeline(run_metadata.step_stats)
+                #    chrome_trace = fetched_timeline.generate_chrome_trace_format()
+                #    with open('lntm.json', 'w') as f:
+                #        f.write(chrome_trace)
 
                 # M step
                 _, ll = sess.run(
@@ -216,6 +217,18 @@ if __name__ == "__main__":
                           np.mean(accs), np.mean(Eta_mean),
                           np.mean(Eta_logstd)))
 
+        # Output topics
+        p = sess.run(phi)
+        for k in range(K):
+            rank = list(zip(list(p[k, :]), range(V)))
+            rank.sort()
+            rank.reverse()
+            sys.stdout.write('Topic {}, eta mean = {:.2f} stdev = {:.2f}: '
+                             .format(k, Eta_mean[k], np.exp(Eta_logstd[k])))
+            for i in range(10):
+                sys.stdout.write(vocab[rank[i][1]] + ' ')
+            sys.stdout.write('\n')
+
         # Run AIS
         time_ais = -time.time()
 
@@ -231,15 +244,3 @@ if __name__ == "__main__":
               '>> loglikelihood lower bound = {}\n'
               '>> perplexity upper bound = {}'
               .format(time_ais, ll_lb, np.exp(-ll_lb * _D / _T)))
-
-        # Output topics
-        p = sess.run(phi)
-        for k in range(K):
-            rank = list(zip(list(p[k, :]), range(V)))
-            rank.sort()
-            rank.reverse()
-            sys.stdout.write('Topic {}, eta mean = {:.2f} stdev = {:.2f}: '
-                             .format(k, Eta_mean[k], np.exp(Eta_logstd[k])))
-            for i in range(10):
-                sys.stdout.write(vocab[rank[i][1]] + ' ')
-            sys.stdout.write('\n')

@@ -39,8 +39,8 @@ def select_from_corpus(l, r, u_v, u_v_score):
     for i in range(r - l):
         # consider the no-rating film / no-rating people
         try:
-            sv = sv + u_v[l + i]
-            tr = tr + u_v_score[l + i]
+            sv += u_v[l + i]
+            tr += u_v_score[l + i]
         except:
             pass
     sv = list(set(sv))
@@ -76,7 +76,7 @@ def main():
     batch_size = 100000
     test_batch_size = 100000
     valid_batch_size = 100000
-    K = 8
+    K = 1
     num_steps = 500
     test_freq = 10
     valid_freq = 10

@@ -87,9 +87,9 @@ template <typename GPUDevice>
 void SparseReduceColsFunctor<GPUDevice>::operator()(const GPUDevice &d,
                                                     int numvals, const float *values, const long long *indices, const long long *shape, float *sum_vec)
 {
-    auto tpb = 64;
+    /*auto tpb = 64;
     auto nb = (shape[0] + tpb - 1) / tpb;
-    zero<<<nb, tpb>>>(shape[0], sum_vec);
+    zero<<<nb, tpb>>>(shape[0], sum_vec);*/
     auto threads_per_block = sum_len / work_per_thread;
     auto numblocks = (numvals + sum_len - 1) / sum_len;
     //std::cout << "cuda kernel begin..." << std::endl;
@@ -100,6 +100,7 @@ void SparseReduceColsFunctor<GPUDevice>::operator()(const GPUDevice &d,
     }*/
     /*std::cout << "in sparse reduce cols: " << shape[0] << " "
               << shape[1] << std::endl;*/
+    auto out_len = shape[0];
     SparseReduceColsKernel<<<numblocks, threads_per_block>>>(numvals, values,
                                                              indices, shape, sum_vec);
     //std::cout << "cuda kernel src complete" << std::endl;

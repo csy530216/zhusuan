@@ -27,7 +27,7 @@ limitations under the License.
 //}
 
 const int rows = 8;
-const int items = 256;
+const int items = 32;
 const unsigned int full_mask = 0xffffffff;
 const int warp_per_block = 8;
 const int warp_size = 32;
@@ -40,7 +40,6 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
   // loop
   extern __shared__ float a_rows[];
   __shared__ float prdt[items];
-  __shared__ bool result[items];
   __shared__ int computed;
   __shared__ int start_row_idx;
   __shared__ int end_row_idx;
@@ -58,7 +57,7 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
       printf("%d items to be summed.\n %d start, %d end\n %d to be load\n", to_be_computed, start_row_idx, end_row_idx, num_rows);*/
   }
   if (threadIdx.x < items)
-    result[threadIdx.x] = false;
+    prdt[threadIdx.x] = -1.0f;
   __syncthreads();
   do
   {
@@ -112,19 +111,15 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
       if (laneId == 0)
       {
         prdt[m] = value;
-        result[m] = true;
       }
     }
     __syncthreads();
-    if (threadIdx.x == 0)
-      computed = 0;
-    __syncthreads();
     if (threadIdx.x < items)
     {
-      auto mask = __ballot_sync(full_mask, result[threadIdx.x]);
-      if (laneId == 0)
+      auto mask = __ballot_sync(full_mask, prdt[threadIdx.x] >= 0);
+      if (threadIdx.x == 0)
       {
-        atomAdd(&computed, __popc(mask));
+        computed = __popc(mask);
       }
     }
     __syncthreads();

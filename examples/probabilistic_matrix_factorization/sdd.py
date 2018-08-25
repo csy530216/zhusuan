@@ -10,7 +10,6 @@ sdd_module = tf.load_op_library('./sparse_dense_dense.so')
 
 # indices: int64
 def sdd(a, b, indices):
-    print(indices)
     return sdd_module.sparse_dense_dense(a, tf.transpose(b), indices)
 
 

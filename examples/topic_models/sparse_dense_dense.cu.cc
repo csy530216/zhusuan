@@ -124,7 +124,7 @@ __global__ void SparseDenseDenseKernel(int ncols, int nnz, const float *A,
       auto mask = __ballot_sync(full_mask, result[threadIdx.x]);
       if (laneId == 0)
       {
-        atomAdd(&computed, __popc(mask));
+        atomicAdd(&computed, __popc(mask));
       }
     }
     __syncthreads();

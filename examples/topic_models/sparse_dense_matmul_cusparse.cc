@@ -1,0 +1,56 @@
+#include "sparse_dense_matmul_cusparse.h"
+
+using namespace tensorflow;
+
+using CPUDevice = Eigen::ThreadPoolDevice;
+using GPUDevice = Eigen::GpuDevice;
+
+REGISTER_OP("SparseDenseMatmulCusparse")
+    .Input("sparse: float32")
+    .Input("indices: int64")
+    .Input("shape: int64")
+    .Input("dense: float32")
+    .Output("matrix: float32");
+
+template <typename Device>
+class SparseDenseMatmulCusparseOp : public OpKernel
+{
+  public:
+    explicit SparseDenseMatmulCusparseOp(OpKernelConstruction *c) : OpKernel(c)
+    {
+    }
+
+    void Compute(OpKernelContext *context) override
+    {
+        const Tensor &sparse = context->input(0);
+        const Tensor &indices = context->input(1);
+        const Tensor &shape = context->input(2);
+        const Tensor &dense = context->input(3);
+
+        const int64 nnz = sparse.dim_size(0);
+        auto sparse_vec = sparse.flat<float>();
+        auto indices_vec = sparse.flat<int64>();
+        auto shape_vec = shape.flat<int64>();
+        auto dense_vec = dense.flat<float>();
+
+        const int64 m = shape_vec[0];
+        const int64 n = shape_vec[1];
+        const int64 k = dense.dim_size(1);
+
+        Tensor *C = NULL;
+        OP_REQUIRES_OK(context,
+                       context->allocate_output(0, TensorShape({m, k}), &C));
+
+        auto C_vec = C.flat<float>();
+    }
+};
+
+#ifdef GOOGLE_CUDA
+#define REGISTER_GPU()                                                  \
+    extern template struct SparseDenseMatmulCusparseFunctor<GPUDevice>; \
+    REGISTER_KERNEL_BUILDER(Name("SparseDenseMatmulCusparse")           \
+                                .Device(DEVICE_GPU)                     \
+                                .HostMemory("shape"),                   \
+                            SparseDenseMatmulCusparseOp<GPUDevice>);
+    REGISTER_GPU();
+#endif // GOOGLE_CUDA

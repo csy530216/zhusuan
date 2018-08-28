@@ -6,7 +6,9 @@
 template <typename Device>
 struct SparseDenseMatmulCusparseFunctor
 {
-    /* data */
+    void operator()(const Device &d, long long m, long long n, long long k,
+                    long long nnz, const float *sparse,
+                    const long long *indices, const float *dense);
 };
 
 #endif // !SPARSE_DENSE_MATMUL_CUSPARSE_H

@@ -42,6 +42,10 @@ class SparseDenseMatmulCusparseOp : public OpKernel
                        context->allocate_output(0, TensorShape({m, k}), &C));
 
         auto C_vec = C.flat<float>();
+
+        SparseDenseMatmulCusparseFunctor<Device>()(
+            context->eigen_device<Device>(), m, n, k, nnz, sparse_vec.data(),
+            indices_vec.data(), dense_vec.data());
     }
 };
 
@@ -52,5 +56,5 @@ class SparseDenseMatmulCusparseOp : public OpKernel
                                 .Device(DEVICE_GPU)                     \
                                 .HostMemory("shape"),                   \
                             SparseDenseMatmulCusparseOp<GPUDevice>);
-    REGISTER_GPU();
+REGISTER_GPU();
 #endif // GOOGLE_CUDA

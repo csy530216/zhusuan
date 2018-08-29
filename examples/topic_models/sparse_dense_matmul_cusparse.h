@@ -8,7 +8,8 @@ struct SparseDenseMatmulCusparseFunctor
 {
     void operator()(const Device &d, long long m, long long n, long long k,
                     long long nnz, const float *sparse,
-                    const long long *indices, const float *dense);
+                    const long long *indices, int *rowIndices, int *csrIndices,
+                    int *colIndices, const float *dense, float *out);
 };
 
 #endif // !SPARSE_DENSE_MATMUL_CUSPARSE_H

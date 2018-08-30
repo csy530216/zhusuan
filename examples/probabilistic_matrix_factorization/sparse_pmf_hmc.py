@@ -24,17 +24,13 @@ def pmf(observed, N, M, D, K, alpha_u, alpha_v, alpha_pred):
         u = zs.Normal('u', mu_u, std=alpha_u,
                       n_samples=K, group_ndims=1)
         u = tf.reshape(u, [-1, D])
-        u = tf.nn.softmax(u)
         mu_v = tf.zeros(shape=[M, D])
         v = zs.Normal('v', mu_v, std=alpha_v,
                       n_samples=K, group_ndims=1)
         v = tf.reshape(v, [-1, D])
-        v = tf.nn.softmax(v)
         r_pred = sdd(u, tf.transpose(v), observed['r_indices'])
-        r = zs.Normal('r_values', r_pred, std=alpha_pred)
-        # Should be: no `u = tf.nn.softmax(u)`, no `v = tf.nn.softmax(v)`,
-        # r should be predicted as tf.sigmoid(r_pred)
-    return model, r_pred
+        r = zs.Normal('r_values', tf.sigmoid(r_pred), std=alpha_pred)
+    return model, tf.reshape(tf.sigmoid(r_pred), [K, -1])
 
 
 def get_indices_and_values(data):
@@ -125,9 +121,9 @@ def main():
             return (tf.concat([idx, tempidx], 0), i + 1)
         tiled_indices, _ = tf.while_loop(c, b, [tiled_indices, i])
         return tiled_indices
-    
+
     tiled_r_indices = sparse_tile(r_indices, [N, M], K)
-    tiled_r_values = tf.tile(r_values, [K])
+    tiled_r_values = tf.tile(normalized_rating, [K])
     sample_u_op, sample_u_info = hmc_u.sample(e_obj_u,
         observed={'v': V, 'r_indices': tiled_r_indices, 'r_values': tiled_r_values},
         latent={'u': U})

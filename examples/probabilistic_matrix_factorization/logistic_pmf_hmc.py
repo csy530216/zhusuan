@@ -76,7 +76,7 @@ def main():
     batch_size = 100000
     test_batch_size = 100000
     valid_batch_size = 100000
-    K = 1
+    K = 8
     num_steps = 500
     test_freq = 10
     valid_freq = 10

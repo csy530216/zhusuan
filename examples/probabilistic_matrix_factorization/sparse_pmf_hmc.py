@@ -54,18 +54,34 @@ def main():
     R_valid_indices, R_valid_values = get_indices_and_values(valid)
     R_test_indices, R_test_values = get_indices_and_values(test)
 
-    r_indices = tf.placeholder(tf.int64, shape=[None, 2], name='r_indices')
-    r_values = tf.placeholder(tf.float32, shape=[None], name='r_values')
-
     # set configurations and hyper parameters
     D = 30
-    K = 1
+    K = 8
     epochs = 500
     valid_freq = 10
     test_freq = 10
     alpha_u = 1.0
     alpha_v = 1.0
     alpha_pred = 0.2 / 4.0
+
+    def sparse_tile(indices, dense_shape, n_rep):
+        tiled_indices = indices
+        i = tf.constant(1, dtype=tf.int64)
+
+        def c(idx, i): return i < tf.cast(n_rep, tf.int64)
+
+        def b(idx, i):
+            nrow = [dense_shape[0] * i, dense_shape[1] * i]
+            tempidx = indices + nrow
+            return (tf.concat([idx, tempidx], 0), i + 1)
+        tiled_indices, _ = tf.while_loop(c, b, [tiled_indices, i])
+        return tiled_indices
+
+    r_indices = tf.placeholder(tf.int64, shape=[None, 2], name='r_indices')
+    r_values = tf.placeholder(tf.float32, shape=[None], name='r_values')
+    normalized_rating = (r_values - 1.0) / 4.0
+    tiled_r_indices = sparse_tile(r_indices, [N, M], K)
+    tiled_r_values = tf.tile(normalized_rating, [K])
 
     U = tf.get_variable('U', shape=[K, N, D],
                         initializer=tf.random_normal_initializer(0, 0.1),
@@ -76,8 +92,7 @@ def main():
                         trainable=False)
 
     # Define models for prediction
-    normalized_rating = (r_values - 1.0) / 4.0
-    _, pred_rating = pmf({'u': U, 'v': V, 'r_indices': r_indices},
+    _, pred_rating = pmf({'u': U, 'v': V, 'r_indices': tiled_r_indices},
                          N, M, D, K, alpha_u, alpha_v, alpha_pred)
     pred_rating = tf.reduce_mean(pred_rating, axis=0)
     error = pred_rating - normalized_rating
@@ -86,14 +101,22 @@ def main():
     def log_joint(observed):
         model, _ = pmf(observed, N, M, D, K, alpha_u, alpha_v, alpha_pred)
         log_pu, log_pv, log_pr = model.local_log_prob(['u', 'v', 'r_values'])
+        # Following code is slow for the use of sparse_reduce_sum.
+        # Replace it with following commented code is not equivalent but can avoid using sparse_reduce_sum.
+        # log_pu = tf.reduce_sum(log_pu)
+        # log_pv = tf.reduce_sum(log_pv)
+        # log_pr = tf.reduce_sum(log_pr)
+        # return log_pu + log_pr, log_pv + log_pr
+
+        # Why not use scatter_nd? Because dense_shape [K*N, K*M] is too large.
+        # The best way is to use src after it supports reduce sum on axis 0.
         r_indices = observed['r_indices']
         dense_shape = [K*N, K*M]
-        log_pr_dense = tf.scatter_nd(r_indices, log_pr, dense_shape)
-        log_pr_u = tf.reduce_sum(log_pr_dense, -1)
+        log_pr_dense = tf.SparseTensor(r_indices, log_pr, dense_shape)
+        log_pr_u = tf.sparse_reduce_sum(log_pr_dense, -1)
         log_pr_u = tf.reshape(log_pr_u, [K, N])
-        log_pr_v = tf.reduce_sum(log_pr_dense, 0)
+        log_pr_v = tf.sparse_reduce_sum(log_pr_dense, 0)
         log_pr_v = tf.reshape(log_pr_v, [K, M])
-
         return log_pu + log_pr_u, log_pv + log_pr_v
 
     def e_obj_u(observed):
@@ -109,21 +132,6 @@ def main():
     hmc_v = zs.HMC(step_size=1e-3, n_leapfrogs=10, adapt_step_size=None,
                    target_acceptance_rate=0.9)
 
-    def sparse_tile(indices, dense_shape, n_rep):
-        tiled_indices = indices
-        i = tf.constant(1, dtype=tf.int64)
-
-        def c(idx, i): return i < tf.cast(n_rep, tf.int64)
-
-        def b(idx, i):
-            nrow = [dense_shape[0] * i, dense_shape[1] * i]
-            tempidx = indices + nrow
-            return (tf.concat([idx, tempidx], 0), i + 1)
-        tiled_indices, _ = tf.while_loop(c, b, [tiled_indices, i])
-        return tiled_indices
-
-    tiled_r_indices = sparse_tile(r_indices, [N, M], K)
-    tiled_r_values = tf.tile(normalized_rating, [K])
     sample_u_op, sample_u_info = hmc_u.sample(e_obj_u,
         observed={'v': V, 'r_indices': tiled_r_indices, 'r_values': tiled_r_values},
         latent={'u': U})

@@ -2,6 +2,6 @@ import tensorflow as tf
 
 sdmc_module = tf.load_op_library('./sparse_dense_matmul_cusparse.so')
 
-def sdmc(sparse, dense):
+def sdmc(sparse, dense, adjoint_a=False):
     return sdmc_module.sparse_dense_matmul_cusparse(sparse.values,
-        sparse.indices, sparse.dense_shape, dense)
+        sparse.indices, sparse.dense_shape, dense, adjoint_a)

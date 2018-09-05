@@ -31,6 +31,14 @@ __global__ void classifyIndices(long long nnz, const long long *indices,
     }
     __syncthreads();
     globalId = blockIdx.x * blockDim.x + threadIdx.x;
+    /*if (globalId == 0)
+    {
+        for (auto i = 0; i < 10; ++i)
+        {
+            printf("%d, %d -- ", shared_row[i], shared_col[i]);
+        }
+        printf("\n");
+    }*/
     for (auto i = threadIdx.x; i < offset; i += blockDim.x)
     {
         rowIndices[globalId] = shared_row[i];
@@ -44,7 +52,7 @@ void SparseDenseMatmulCusparseFunctor<GPUDevice>::operator()(
     const GPUDevice &d, long long m, long long n, long long k,
     long long nnz, const float *sparse, const long long *indices,
     int *rowIndices, int *csrIndices, int *colIndices, const float *dense,
-    float *output)
+    float *output, bool transpose_sparse)
 {
     const int blocks = (nnz + shared_len - 1) / shared_len;
     classifyIndices<<<blocks, threads_per_block>>>(nnz, indices, rowIndices,
@@ -61,11 +69,26 @@ void SparseDenseMatmulCusparseFunctor<GPUDevice>::operator()(
 
     status = cusparseXcoo2csr(handle, rowIndices, nnz, m, csrIndices,
                               CUSPARSE_INDEX_BASE_ZERO);
+    //printf("coo to csr status %d\n", status);
 
     float alpha = 1.0f;
     float zero = 0.0f;
-    status = cusparseScsrmm(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m, k,
-                            n, nnz, &alpha, descr, sparse, csrIndices, colIndices, dense, n, &zero, output, m);
+    if (transpose_sparse)
+    {
+        status = cusparseScsrmm(handle, CUSPARSE_OPERATION_TRANSPOSE, m, k,
+                                n, nnz, &alpha, descr, sparse, csrIndices, colIndices, dense, m, &zero, output, n);
+        //printf("compute complete %d\n", status);
+    }
+    else
+    {
+        status = cusparseScsrmm(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m, k,
+                                n, nnz, &alpha, descr, sparse, csrIndices,
+                                colIndices, dense, n, &zero, output, m);
+        //printf("non transpose compute complete %d\n", status);
+    }
+
+    status = cusparseDestroyMatDescr(descr);
+    status = cusparseDestroy(handle);
 }
 
 template struct SparseDenseMatmulCusparseFunctor<GPUDevice>;

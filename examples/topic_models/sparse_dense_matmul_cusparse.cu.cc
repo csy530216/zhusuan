@@ -1,6 +1,7 @@
 #ifdef GOOGLE_CUDA
 #define EIGEN_USE_GPU
 #include <cusparse.h>
+#include <cublas_v2.h>
 #include "sparse_dense_matmul_cusparse.h"
 
 using namespace tensorflow;
@@ -52,20 +53,53 @@ void SparseDenseMatmulCusparseFunctor<GPUDevice>::operator()(
     const GPUDevice &d, long long m, long long n, long long k,
     long long nnz, const float *sparse, const long long *indices,
     int *rowIndices, int *csrIndices, int *colIndices, const float *dense,
-    float *output, bool transpose_sparse)
+    float *dense_t, float *output, float *output_t, bool transpose_sparse)
 {
     const int blocks = (nnz + shared_len - 1) / shared_len;
     classifyIndices<<<blocks, threads_per_block>>>(nnz, indices, rowIndices,
                                                    colIndices);
 
+    int *rows = new int[nnz];
+    int *cols = new int[nnz];
+    float *vals = new float[nnz];
+    cudaMemcpy(rows, rowIndices, nnz * sizeof(int), cudaMemcpyDefault);
+    cudaMemcpy(cols, colIndices, nnz * sizeof(int), cudaMemcpyDefault);
+    cudaMemcpy(vals, sparse, nnz * sizeof(float), cudaMemcpyDefault);
+    for (auto i = 0; i < nnz; ++i)
+    {
+        printf("%d %d %f -- ", rows[i], cols[i], vals[i]);
+    }
+    printf("\n");
+    delete[] rows;
+    delete[] cols;
+    delete[] vals;
+
+    printf("%d %d\n", n, k);
+    float *dvals = new float[n * k];
+    cudaMemcpy(dvals, dense, n * k * sizeof(float), cudaMemcpyDefault);
+    for (auto i = 0; i < n * k; ++i)
+    {
+        printf("%f\n", dvals[i]);
+    }
+    delete[] dvals;
+
     cusparseStatus_t status;
     cusparseHandle_t handle = 0;
     cusparseMatDescr_t descr = 0;
+    cublasHandle_t b_handle = 0;
 
     status = cusparseCreate(&handle);
+    if (status > 0)
+        printf("error occured!\n");
     status = cusparseCreateMatDescr(&descr);
-    cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
-    cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
+    if (status > 0)
+        printf("error occured!\n");
+    status = cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
+    if (status > 0)
+        printf("error occured!\n");
+    status = cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
+    if (status > 0)
+        printf("error occured!\n");
 
     status = cusparseXcoo2csr(handle, rowIndices, nnz, m, csrIndices,
                               CUSPARSE_INDEX_BASE_ZERO);
@@ -73,6 +107,8 @@ void SparseDenseMatmulCusparseFunctor<GPUDevice>::operator()(
 
     float alpha = 1.0f;
     float zero = 0.0f;
+    cublasCreate(&b_handle);
+
     if (transpose_sparse)
     {
         status = cusparseScsrmm(handle, CUSPARSE_OPERATION_TRANSPOSE, m, k,
@@ -81,14 +117,27 @@ void SparseDenseMatmulCusparseFunctor<GPUDevice>::operator()(
     }
     else
     {
+        cublasSgeam(b_handle, CUBLAS_OP_T, CUBLAS_OP_N, n, k, &alpha, dense,
+                    k, &zero, dense, n, dense_t, n);
+        float *dvalst = new float[n * k];
+        cudaMemcpy(dvalst, dense_t, n * k * sizeof(float), cudaMemcpyDefault);
+        for (auto i = 0; i < n * k; ++i)
+        {
+            printf("%f\n", dvalst[i]);
+        }
+        delete[] dvalst;
+
         status = cusparseScsrmm(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m, k,
                                 n, nnz, &alpha, descr, sparse, csrIndices,
-                                colIndices, dense, n, &zero, output, m);
+                                colIndices, dense_t, n, &zero, output_t, m);
         //printf("non transpose compute complete %d\n", status);
+        cublasSgeam(b_handle, CUBLAS_OP_T, CUBLAS_OP_N, k, m, &alpha, output_t,
+                    m, &zero, output_t, k, output, k);
     }
 
     status = cusparseDestroyMatDescr(descr);
     status = cusparseDestroy(handle);
+    cublasDestroy(b_handle);
 }
 
 template struct SparseDenseMatmulCusparseFunctor<GPUDevice>;

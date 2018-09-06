@@ -40,6 +40,7 @@ class SparseDenseMatmulCusparseOp : public OpKernel
         const int64 m = shape_vec(0);
         const int64 n = shape_vec(1);
         const int64 k = dense.dim_size(1);
+        const int64 j = dense.dim_size(0);
 
         Tensor rowIndices;
         OP_REQUIRES_OK(context,
@@ -57,29 +58,43 @@ class SparseDenseMatmulCusparseOp : public OpKernel
                                               TensorShape({nnz}), &colIndices));
 
         Tensor *C = NULL;
+        Tensor C_t;
         if (*transpose)
         {
             OP_REQUIRES_OK(context,
                            context->allocate_output(0,
                                                     TensorShape({n, k}), &C));
+            OP_REQUIRES_OK(context,
+                           context->allocate_temp(DataType::DT_FLOAT,
+                                                  TensorShape({n, k}), &C_t));
         }
         else
         {
             OP_REQUIRES_OK(context,
                            context->allocate_output(0,
                                                     TensorShape({m, k}), &C));
+            OP_REQUIRES_OK(context,
+                           context->allocate_temp(DataType::DT_FLOAT,
+                                                  TensorShape({m, k}), &C_t));
         }
+
+        Tensor dense_t;
+        OP_REQUIRES_OK(context,
+                       context->allocate_temp(DataType::DT_FLOAT,
+                                              TensorShape({j, k}), &dense_t));
 
         auto rowIndices_vec = rowIndices.flat<int>();
         auto csrIndices_vec = csrIndices.flat<int>();
         auto colIndices_vec = colIndices.flat<int>();
         auto C_vec = C->flat<float>();
+        auto dense_t_vec = dense_t.flat<float>();
+        auto C_t_vec = C_t.flat<float>();
 
         SparseDenseMatmulCusparseFunctor<Device>()(
             context->eigen_device<Device>(), m, n, k, nnz, sparse_vec.data(),
             indices_vec.data(), rowIndices_vec.data(), csrIndices_vec.data(),
-            colIndices_vec.data(), dense_vec.data(), C_vec.data(),
-            *transpose);
+            colIndices_vec.data(), dense_vec.data(), dense_t_vec.data(),
+            C_vec.data(), C_t_vec.data(), *transpose);
     }
 };
 

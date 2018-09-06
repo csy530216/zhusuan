@@ -8,7 +8,7 @@ all: sparse_dense_dense.so sparse_reduce_cols.so sparse_dense_matmul_cusparse.so
 	nvcc -std=c++11 -c -o $@ $^ $(TF_CFLAGS) -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC
 
 %.so: %.cc %.cu.o
-	g++ -std=c++11 -shared -o $@ $^ $(TF_CFLAGS) -fPIC $(CUDA_FLAGS) -lcudart -lcusparse $(TF_LFLAGS) -D GOOGLE_CUDA=1
+	g++ -std=c++11 -shared -o $@ $^ $(TF_CFLAGS) -fPIC $(CUDA_FLAGS) -lcudart -lcusparse -lcublas $(TF_LFLAGS) -D GOOGLE_CUDA=1
 
 clean:
 	#-rm *.o

@@ -6,6 +6,7 @@ from tensorflow.python.ops import math_ops
 import tensorflow as tf
 
 from sdmc import *
+from sdm import *
 
 
 sdd_module = tf.load_op_library('./sparse_dense_dense.so')
@@ -29,7 +30,7 @@ def _sparse_dense_dense_grad(op, grad):
                            dense_shape=result_shape)
 
     #grad_a      = sparse_ops.sparse_tensor_dense_matmul(grad, b)
-    grad_a = sdmc(grad, b)
+    grad_a = sdm(grad, b)
     #grad_b = sparse_ops.sparse_tensor_dense_matmul(grad, a, adjoint_a=True)
     grad_b = sdmc(grad, a, adjoint_a=True)
     return [grad_a, grad_b, None]

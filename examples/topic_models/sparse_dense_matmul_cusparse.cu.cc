@@ -59,7 +59,7 @@ void SparseDenseMatmulCusparseFunctor<GPUDevice>::operator()(
     classifyIndices<<<blocks, threads_per_block>>>(nnz, indices, rowIndices,
                                                    colIndices);
 
-    int *rows = new int[nnz];
+    /*int *rows = new int[nnz];
     int *cols = new int[nnz];
     float *vals = new float[nnz];
     cudaMemcpy(rows, rowIndices, nnz * sizeof(int), cudaMemcpyDefault);
@@ -81,7 +81,7 @@ void SparseDenseMatmulCusparseFunctor<GPUDevice>::operator()(
     {
         printf("%f\n", dvals[i]);
     }
-    delete[] dvals;
+    delete[] dvals;*/
 
     cusparseStatus_t status;
     cusparseHandle_t handle = 0;
@@ -111,21 +111,25 @@ void SparseDenseMatmulCusparseFunctor<GPUDevice>::operator()(
 
     if (transpose_sparse)
     {
+        cublasSgeam(b_handle, CUBLAS_OP_T, CUBLAS_OP_N, m, k, &alpha, dense,
+                    k, &zero, dense, m, dense_t, m);
         status = cusparseScsrmm(handle, CUSPARSE_OPERATION_TRANSPOSE, m, k,
-                                n, nnz, &alpha, descr, sparse, csrIndices, colIndices, dense, m, &zero, output, n);
+                                n, nnz, &alpha, descr, sparse, csrIndices, colIndices, dense_t, m, &zero, output_t, n);
+        cublasSgeam(b_handle, CUBLAS_OP_T, CUBLAS_OP_N, k, n, &alpha, output_t,
+                    n, &zero, output_t, k, output, k);
         //printf("compute complete %d\n", status);
     }
     else
     {
         cublasSgeam(b_handle, CUBLAS_OP_T, CUBLAS_OP_N, n, k, &alpha, dense,
                     k, &zero, dense, n, dense_t, n);
-        float *dvalst = new float[n * k];
+        /*float *dvalst = new float[n * k];
         cudaMemcpy(dvalst, dense_t, n * k * sizeof(float), cudaMemcpyDefault);
         for (auto i = 0; i < n * k; ++i)
         {
             printf("%f\n", dvalst[i]);
         }
-        delete[] dvalst;
+        delete[] dvalst;*/
 
         status = cusparseScsrmm(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m, k,
                                 n, nnz, &alpha, descr, sparse, csrIndices,

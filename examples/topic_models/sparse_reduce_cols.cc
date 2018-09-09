@@ -47,6 +47,7 @@ class SparseReduceColsOp : public OpKernel
         //std::cout << "flat complete. the shape: " << std::endl;
         //std::cout << vec.data() << std::endl;
         //std::cout << vec(0) << std::endl;
+        //printf("shape: %d, %d, %d\n", vec(0), vec(1), num_values);
         TensorShape shape;
         OP_REQUIRES_OK(context,
                        TensorShapeUtils::MakeShape(vec.data(), 1,

@@ -13,7 +13,7 @@ const int sum_len = 256;
 const int work_per_thread = 4;
 
 __global__ void SparseReduceColsKernel(int numvals, const float *values,
-                                       const long long *indices, const long long *shape, float *sum_vec)
+                                       const long long *indices, float *sum_vec)
 {
     __shared__ float sum[sum_len];
     for (auto i = threadIdx.x; i < sum_len; i += blockDim.x)
@@ -60,16 +60,19 @@ __global__ void SparseReduceColsKernel(int numvals, const float *values,
     }
     __syncthreads();
     auto bound = block_end_idx - block_start_idx + 1;
+    /*if (threadIdx.x == 0)
+        printf("%d\n", bound);*/
     for (auto i = threadIdx.x; i < bound; i += blockDim.x)
     {
-        if (i == 0 || i == bound - 1)
+        /*if (i == 0 || i == bound - 1)
         {
             atomicAdd(sum_vec + block_start_idx + i, sum[i]);
         }
         else
         {
             sum_vec[block_start_idx + i] = sum[i];
-        }
+        }*/
+        atomicAdd(sum_vec + block_start_idx + i, sum[i]);
     }
 }
 
@@ -100,9 +103,9 @@ void SparseReduceColsFunctor<GPUDevice>::operator()(const GPUDevice &d,
     }*/
     /*std::cout << "in sparse reduce cols: " << shape[0] << " "
               << shape[1] << std::endl;*/
-    auto out_len = shape[0];
+    //auto out_len = shape[0];
     SparseReduceColsKernel<<<numblocks, threads_per_block>>>(numvals, values,
-                                                             indices, shape, sum_vec);
+                                                             indices, sum_vec);
     //std::cout << "cuda kernel src complete" << std::endl;
 }
 

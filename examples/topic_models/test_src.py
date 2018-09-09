@@ -1,11 +1,12 @@
+import numpy as np
 import tensorflow as tf
 from src import *
 
 N = 100
 K = 12419
 
-a = tf.random_uniform((N, K))
-mask = tf.random_uniform((N, K)) < 0.04
+a = np.random.random((N, K)).astype(np.float32)
+mask = a < 0.04
 indices = tf.where(mask)
 values = tf.gather_nd(a, indices)
 sparse = tf.SparseTensor(indices=indices, values=values, dense_shape=[N, K])

@@ -46,9 +46,9 @@ def main():
     tf.set_random_seed(1237)
     M, N, train_data, valid_data, test_data = dataset.load_movielens1m(
         os.path.join(conf.data_dir, 'ml-1m.zip'))
-    train = csr_matrix((train_data[:, -1], (train_data[:, 0], train_data[:, 1])))
-    valid = csr_matrix((valid_data[:, -1], (valid_data[:, 0], valid_data[:, 1])))
-    test = csr_matrix((test_data[:, -1], (test_data[:, 0], test_data[:, 1])))
+    train = csr_matrix((train_data[:, -1], (train_data[:, 0], train_data[:, 1])), shape=[N, M])
+    valid = csr_matrix((valid_data[:, -1], (valid_data[:, 0], valid_data[:, 1])), shape=[N, M])
+    test = csr_matrix((test_data[:, -1], (test_data[:, 0], test_data[:, 1])), shape=[N, M])
 
     R_train_indices, R_train_values = get_indices_and_values(train)
     R_valid_indices, R_valid_values = get_indices_and_values(valid)

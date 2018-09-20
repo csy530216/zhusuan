@@ -107,12 +107,12 @@ void SparseReduceColsFunctor<GPUDevice>::operator()(const GPUDevice &d,
     //auto out_len = shape[0];
     SparseReduceColsKernel<<<numblocks, threads_per_block>>>(numvals, values,
                                                              indices, sum_vec);
-    cudaDeviceSynchronize();
+    /*cudaDeviceSynchronize();
     auto error = cudaGetLastError();
     if (error)
     {
         printf("error occurred: %d\n", error);
-    }
+    }*/
     //printf("OK!\n");
     //std::cout << "cuda kernel src complete" << std::endl;
 }

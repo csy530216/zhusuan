@@ -93,6 +93,7 @@ void SparseReduceColsFunctor<GPUDevice>::operator()(const GPUDevice &d,
     /*auto tpb = 64;
     auto nb = (shape[0] + tpb - 1) / tpb;
     zero<<<nb, tpb>>>(shape[0], sum_vec);*/
+    cudaMemset(sum_vec, 0, shape[0] * sizeof(float));
     auto threads_per_block = sum_len / work_per_thread;
     auto numblocks = (numvals + sum_len - 1) / sum_len;
     //std::cout << "cuda kernel begin..." << std::endl;
@@ -106,6 +107,13 @@ void SparseReduceColsFunctor<GPUDevice>::operator()(const GPUDevice &d,
     //auto out_len = shape[0];
     SparseReduceColsKernel<<<numblocks, threads_per_block>>>(numvals, values,
                                                              indices, sum_vec);
+    cudaDeviceSynchronize();
+    auto error = cudaGetLastError();
+    if (error)
+    {
+        printf("error occurred: %d\n", error);
+    }
+    //printf("OK!\n");
     //std::cout << "cuda kernel src complete" << std::endl;
 }
 

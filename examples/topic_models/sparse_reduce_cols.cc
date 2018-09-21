@@ -29,6 +29,7 @@ class SparseReduceColsOp : public OpKernel
 
     void Compute(OpKernelContext *context) override
     {
+        //std::cout << "begin call src" << std::endl;
         const Tensor &vals = context->input(0);
         const Tensor &inds = context->input(1);
         const Tensor &shape_input = context->input(2);
@@ -66,6 +67,7 @@ class SparseReduceColsOp : public OpKernel
         /*std::cout << out.data() << " " << values.data() << " "
                   << vec.data() << std::endl;*/
 
+        //std::cout << "begin call src" << std::endl;
         SparseReduceColsFunctor<Device>()(context->eigen_device<Device>(),
                                           num_values, values.data(),
                                           indices.data(), vec.data(), out.data());

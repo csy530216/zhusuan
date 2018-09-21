@@ -59,7 +59,8 @@ if __name__ == "__main__":
     if data_name == 'nips':
         n_train = 1200
         D = 100
-        K = 20
+        #K = 20
+        K = 500
     else:
         n_train = 30000
         D = 2500

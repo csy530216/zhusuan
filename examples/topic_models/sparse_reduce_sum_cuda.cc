@@ -1,4 +1,4 @@
-#include "sparse_reduce_cols.h"
+#include "sparse_reduce_sum_cuda.h"
 //#include "tensorflow/core/framework/shape_inference.h"
 //#include "tensorflow/core/framework/tensor_shape.h"
 //#include "tensorflow/core/kernels/fill_functor.h"
@@ -8,10 +8,11 @@ using namespace tensorflow; // NOLINT(build/namespaces)
 using CPUDevice = Eigen::ThreadPoolDevice;
 using GPUDevice = Eigen::GpuDevice;
 
-REGISTER_OP("SparseReduceCols")
+REGISTER_OP("SparseReduceSumCuda")
     .Input("values: float32")
     .Input("indices: int64")
     .Input("shape: int64")
+    .Input("axis: int32")
     .Output("arr: float32");
 /*.SetShapeFn([](::tensorflow::shape_inference::InferenceContext *c) {
         c->set_output(0, c->Vector(c->Dim(c->input(2), 0)));
@@ -22,10 +23,10 @@ REGISTER_OP("SparseReduceCols")
                       const int64 *shape, float *sum_vec);*/
 
 template <typename Device>
-class SparseReduceColsOp : public OpKernel
+class SparseReduceSumCudaOp : public OpKernel
 {
   public:
-    explicit SparseReduceColsOp(OpKernelConstruction *c) : OpKernel(c) {}
+    explicit SparseReduceSumCudaOp(OpKernelConstruction *c) : OpKernel(c) {}
 
     void Compute(OpKernelContext *context) override
     {
@@ -33,6 +34,8 @@ class SparseReduceColsOp : public OpKernel
         const Tensor &vals = context->input(0);
         const Tensor &inds = context->input(1);
         const Tensor &shape_input = context->input(2);
+        const Tensor &axis = context->input(3);
+        const int *axis_ptr = axis.flat<int>().data();
         const int64 num_values = vals.dim_size(0);
         /*std::cout << "vals num: " << num_values << " "
                   << vals.flat<float>().size() << " "
@@ -66,11 +69,22 @@ class SparseReduceColsOp : public OpKernel
         auto out = output->flat<float>();
         /*std::cout << out.data() << " " << values.data() << " "
                   << vec.data() << std::endl;*/
+        int *temp_mem = NULL;
+        if (*axis_ptr == 0)
+        {
+            Tensor temp_tensor;
+            OP_REQUIRES_OK(context,
+                           context->allocate_temp(DataType::DT_INT32,
+                                                  TensorShape({num_values * 6}),
+                                                  &temp_tensor));
+            temp_mem = temp_tensor.flat<int>().data();
+        }
 
-        //std::cout << "begin call src" << std::endl;
-        SparseReduceColsFunctor<Device>()(context->eigen_device<Device>(),
+
+        SparseReduceSumCudaFunctor<Device>()(context->eigen_device<Device>(),
                                           num_values, values.data(),
-                                          indices.data(), vec.data(), out.data());
+                                          indices.data(), vec.data(), 
+                                          out.data(), temp_mem, *axis_ptr);
     }
 };
 
@@ -78,10 +92,11 @@ class SparseReduceColsOp : public OpKernel
 #ifdef GOOGLE_CUDA
 #define REGISTER_GPU()                                               \
     /* It's recommended to add the code below, but not essential. */ \
-    extern template struct SparseReduceColsFunctor<GPUDevice>;       \
-    REGISTER_KERNEL_BUILDER(Name("SparseReduceCols")                 \
+    extern template struct SparseReduceSumCudaFunctor<GPUDevice>;       \
+    REGISTER_KERNEL_BUILDER(Name("SparseReduceSumCuda")                 \
                                 .Device(DEVICE_GPU)                  \
-                                .HostMemory("shape"),                \
-                            SparseReduceColsOp<GPUDevice>);
+                                .HostMemory("shape")                \
+                                .HostMemory("axis"),                \
+                            SparseReduceSumCudaOp<GPUDevice>);
 REGISTER_GPU();
 #endif // GOOGLE_CUDA

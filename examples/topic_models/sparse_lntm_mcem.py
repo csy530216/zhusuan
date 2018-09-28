@@ -21,7 +21,7 @@ import zhusuan as zs
 from examples import conf
 from examples.utils import dataset
 from sdd import *
-from src import *
+from srsc import *
 
 from scipy.sparse import csr_matrix
 from tensorflow.python.client import timeline
@@ -148,7 +148,7 @@ if __name__ == "__main__":
         #log_pred = tf.SparseTensor(indices=x_indices, values=log_pred, dense_shape=dense_shape)
         #log_px = tf.sparse_reduce_sum(log_pred, -1)
         #log_px = tf.reduce_sum(tf.scatter_nd(x_indices, log_pred, dense_shape), -1)
-        log_px = src(log_pred, x_indices, dense_shape)
+        log_px = srsc(log_pred, x_indices, dense_shape)
         log_px = tf.reshape(log_px, [n_chains_ph, D_ph])
         #log_px = tf.Print(log_px, [tf.reduce_sum(lp), tf.reduce_sum(lp2), tf.reduce_sum(log_px)], 'log_px')
 

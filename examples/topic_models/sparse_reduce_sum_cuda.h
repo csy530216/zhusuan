@@ -4,10 +4,10 @@
 #include "tensorflow/core/framework/op_kernel.h"
 
 template <typename Device>
-struct SparseReduceColsFunctor
+struct SparseReduceSumCudaFunctor
 {
     void operator()(const Device &d, int numvals, const float *values,
-                    const long long *indices, const long long *shape, float *sum_vec);
+                    const long long *indices, const long long *shape, float *sum_vec, int *temp_buf, int axis = 1);
 };
 
 // the codes below should not add to header file!

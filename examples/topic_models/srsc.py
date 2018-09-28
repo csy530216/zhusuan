@@ -3,14 +3,14 @@ from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops, math_ops
 
 
-src_module = tf.load_op_library('./sparse_reduce_cols.so')
+src_module = tf.load_op_library('./sparse_reduce_sum_cuda.so')
 
 
-def src(values, indices, shape):
-    return src_module.sparse_reduce_cols(values, indices, shape)
+def srsc(values, indices, shape, axis=1):
+    return src_module.sparse_reduce_sum_cuda(values, indices, shape, axis)
 
 
-@ops.RegisterGradient("SparseReduceCols")
+@ops.RegisterGradient("SparseReduceSumCuda")
 def _sparse_reduce_cols_grad(op, grad):
     values = op.inputs[0]
     indices = op.inputs[1]

@@ -3,6 +3,8 @@
 #define EIGEN_USE_GPU
 //#include <cuda_runtime_api.h>
 #include "sparse_dense_matmul.h"
+#include "cub/cub.cuh"
+#include "util.cuh"
 
 using namespace tensorflow;
 
@@ -14,8 +16,8 @@ const int threads_per_block = 64;
 //const int threads_per_warp = 32;
 
 __global__ void matmul(long long m, long long n, long long k, long long nnz,
-                       const float *sparse, const long long *indices,
-                       const float *dense, float *output)
+                       const float *sparse, const int *rowIndices,
+                       const int *colIndices, const float *dense, float *output)
 {
     //__shared__ float out_temp[threads_per_block];
     __shared__ int sparse_row[tasks_per_block];
@@ -33,8 +35,8 @@ __global__ void matmul(long long m, long long n, long long k, long long nnz,
     {
         auto j = sparse_start_id + threadIdx.x;
         sparse_val[threadIdx.x] = sparse[j];
-        sparse_row[threadIdx.x] = (int)indices[j * 2];
-        sparse_col[threadIdx.x] = (int)indices[j * 2 + 1];
+        sparse_row[threadIdx.x] = rowIndices[j];
+        sparse_col[threadIdx.x] = colIndices[j];
     }
     __syncthreads();
 
@@ -125,15 +127,52 @@ template <typename GPUDevice>
 void SparseDenseMatmulFunctor<GPUDevice>::operator()(
     const GPUDevice &d, long long m, long long n, long long k, long long nnz,
     const float *sparse, const long long *indices, const float *dense,
-    float *output, bool transpose_sparse)
+    float *output, bool transpose_sparse, int *tempbuf)
 {
     const auto j = transpose_sparse ? n : m;
     cudaMemset(output, 0, j * k * sizeof(float));
     //printf("%d, %d, %d\n", m, n, k);
-
+    int *rowIndices = tempbuf;
+    int *colIndices = tempbuf + nnz;
+    const int threads_pb = 256;
+    const int tasks_pt = 8;
+    const int tasks_pb = tasks_pt * threads_pb;
+    const int blocks = (nnz + tasks_pb - 1) / tasks_pb;
     const auto num_blocks = (nnz + tasks_per_block - 1) / tasks_per_block;
-    matmul<<<num_blocks, threads_per_block>>>(
-        m, n, k, nnz, sparse, indices, dense, output);
+    if (!transpose_sparse)
+    {
+        extractIndices<<<blocks, threads_pb>>>(nnz, indices, rowIndices,                                               colIndices);
+        matmul<<<num_blocks, threads_per_block>>>(
+            m, n, k, nnz, sparse, rowIndices, colIndices, dense, output);
+    }
+    else
+    {
+        extractIndices<<<blocks, threads_pb>>>(nnz, indices, colIndices,
+                                               rowIndices);
+        int *tempIdx = colIndices + nnz;
+        initIndices<<<blocks, threads_pb>>>(nnz, tempIdx);
+        int *alt_row = tempIdx + nnz;
+        int *alt_idx = alt_row + nnz;
+        cub::DoubleBuffer<int> keys(rowIndices, alt_row);
+        cub::DoubleBuffer<int> idx(tempIdx, alt_idx);
+        void *temp_store = NULL;
+        size_t temp_store_byte = 0;
+        cub::DeviceRadixSort::SortPairs(temp_store, temp_store_byte, keys,
+                                        idx, nnz);
+        if (temp_store_byte <= nnz * sizeof(int) * 2)
+            temp_store = (void *)(alt_idx + nnz);
+        else
+            cudaMalloc(&temp_store, temp_store_byte);
+        cub::DeviceRadixSort::SortPairs(temp_store, temp_store_byte, keys,
+                                        idx, nnz);
+        int *col_cpy = alt_idx + nnz;
+        float *val_cpy = reinterpret_cast<float *>(col_cpy + nnz);
+        resort<<<blocks, threads_pb>>>(nnz, idx.Current(), colIndices, sparse,
+                                       col_cpy, val_cpy);
+        matmul<<<num_blocks, threads_per_block>>>(
+            n, m, k, nnz, val_cpy, keys.Current(), col_cpy, dense,
+            output);
+    }
 }
 
 template struct SparseDenseMatmulFunctor<GPUDevice>;

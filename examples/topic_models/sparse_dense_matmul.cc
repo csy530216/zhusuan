@@ -47,9 +47,15 @@ class SparseDenseMatmulOp : public OpKernel
                        context->allocate_output(0,
                                                 TensorShape({j, k}), &C));
         auto C_vec = C->flat<float>();
+        Tensor temp;
+        OP_REQUIRES_OK(context,
+                       context->allocate_temp(DataType::DT_INT32,
+                                              TensorShape({nnz * 7}),
+                                              &temp));
         SparseDenseMatmulFunctor<Device>()(
             context->eigen_device<Device>(), m, n, k, nnz, sparse_vec.data(),
-            indices_vec.data(), dense_vec.data(), C_vec.data(), *transpose);
+            indices_vec.data(), dense_vec.data(), C_vec.data(), *transpose,
+            temp.flat<int>().data());
     }
 };
 

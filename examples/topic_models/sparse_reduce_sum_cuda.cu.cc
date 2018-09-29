@@ -96,6 +96,7 @@ void SparseReduceSumCudaFunctor<GPUDevice>::operator()(const GPUDevice &d,
                                                        int axis)
 {
     cudaMemset(sum_vec, 0, numvals * sizeof(float));
+    //printf("sum vec initial complete\n");
     int *rowIndices = temp_buf;
     int *colIndices = temp_buf + numvals;
     const int threads_per_block = 256;
@@ -104,6 +105,8 @@ void SparseReduceSumCudaFunctor<GPUDevice>::operator()(const GPUDevice &d,
     const int blocks = (numvals + tasks_per_block - 1) / tasks_per_block;
     extractIndices<<<blocks, threads_per_block>>>(numvals, indices,
                                                   rowIndices, colIndices, tasks_per_thread);
+    //printf("%d, %d\n", rowIndices[0], rowIndices[numvals - 1]);
+    //printf("index extract complete %d\n", axis);
     auto numblocks = (numvals + sum_len - 1) / sum_len;
     if (axis == 1 || axis == -1)
     {
@@ -123,12 +126,14 @@ void SparseReduceSumCudaFunctor<GPUDevice>::operator()(const GPUDevice &d,
         SparseReduceSumCudaKernel<<<numblocks, sum_len / work_per_thread>>>(
             numvals, values, rowIndices, sum_vec);
         //std::cout << "cuda kernel src complete" << std::endl;
+        //std::cout << cudaGetLastError() << std::endl;
     }else
     {
         int *alt_col = colIndices + numvals;
-        float *vals = reinterpret_cast<float *>(alt_col + numvals);
-        cudaMemcpyAsync(vals, values, numvals * sizeof(float),
-            cudaMemcpyDefault);
+        //printf("begin copy\n");
+        float *vals = (float *)(alt_col + numvals);
+        cudaMemcpy(vals, values, numvals * sizeof(float),cudaMemcpyDefault);
+        //printf("copy complete\n");
         float *alt_vals = vals + numvals;
         void *temp_store = NULL;
         size_t temp_store_byte = 0;

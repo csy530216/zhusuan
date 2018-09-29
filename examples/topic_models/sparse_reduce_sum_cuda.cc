@@ -53,9 +53,13 @@ class SparseReduceSumCudaOp : public OpKernel
         //std::cout << vec(0) << std::endl;
         //printf("shape: %d, %d, %d\n", vec(0), vec(1), num_values);
         TensorShape shape;
-        OP_REQUIRES_OK(context,
-                       TensorShapeUtils::MakeShape(vec.data(), 1,
-                                                   &shape));
+        if (*axis_ptr == 1 || *axis_ptr == -1)
+            OP_REQUIRES_OK(context,
+                           TensorShapeUtils::MakeShape(vec.data(), 1, &shape));
+        else
+            OP_REQUIRES_OK(context,
+                           TensorShapeUtils::MakeShape(vec.data() + 1, 1,
+                                                       &shape));
         //std::cout << "shape creation complete." << std::endl;
 
         Tensor *output = NULL;
@@ -70,16 +74,17 @@ class SparseReduceSumCudaOp : public OpKernel
         /*std::cout << out.data() << " " << values.data() << " "
                   << vec.data() << std::endl;*/
         int *temp_mem = NULL;
-        if (*axis_ptr == 0)
-        {
-            Tensor temp_tensor;
-            OP_REQUIRES_OK(context,
-                           context->allocate_temp(DataType::DT_INT32,
-                                                  TensorShape({num_values * 6}),
-                                                  &temp_tensor));
-            temp_mem = temp_tensor.flat<int>().data();
-        }
+        //if (*axis_ptr == 0)
+        //{
+        Tensor temp_tensor;
+        OP_REQUIRES_OK(context,
+                        context->allocate_temp(DataType::DT_INT32,
+                                                TensorShape({num_values * 6}),
+                                                &temp_tensor));
+        temp_mem = temp_tensor.flat<int>().data();
+        //}
 
+        //std::cout << "srsc initial complete" << std::endl;
 
         SparseReduceSumCudaFunctor<Device>()(context->eigen_device<Device>(),
                                           num_values, values.data(),

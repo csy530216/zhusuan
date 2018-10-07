@@ -23,6 +23,7 @@ class SparseDenseMatmulCusparseOp : public OpKernel
 
     void Compute(OpKernelContext *context) override
     {
+        printf("sparse dense matmul cusparse begin\n");
         const Tensor &sparse = context->input(0);
         const Tensor &indices = context->input(1);
         const Tensor &shape = context->input(2);
@@ -107,4 +108,12 @@ class SparseDenseMatmulCusparseOp : public OpKernel
                                 .HostMemory("transpose_sparse"),        \
                             SparseDenseMatmulCusparseOp<GPUDevice>);
 REGISTER_GPU();
+#define REGISTER_XLA_GPU()                                                  \
+    extern template struct SparseDenseMatmulCusparseFunctor<GPUDevice>; \
+    REGISTER_KERNEL_BUILDER(Name("SparseDenseMatmulCusparse")           \
+                                .Device("XLA_GPU")                     \
+                                .HostMemory("shape")                    \
+                                .HostMemory("transpose_sparse"),        \
+                            SparseDenseMatmulCusparseOp<GPUDevice>);
+REGISTER_XLA_GPU();
 #endif // GOOGLE_CUDA

@@ -23,6 +23,7 @@ class SparseDenseMatmulOp : public OpKernel
 
     void Compute(OpKernelContext *context) override
     {
+        //printf("sparse dense matmul begin\n");
         const Tensor &sparse = context->input(0);
         const Tensor &indices = context->input(1);
         const Tensor &shape = context->input(2);
@@ -41,6 +42,11 @@ class SparseDenseMatmulOp : public OpKernel
         const int64 n = shape_vec(1);
         const int64 k = dense.dim_size(1);
 
+        /*if (*transpose)
+        {
+            printf("dimensions: %d, %d, %d, %d\n", m, n, dense.dim_size(0), k);
+        }*/
+
         Tensor *C = NULL;
         auto j = *transpose ? n : m;
         OP_REQUIRES_OK(context,
@@ -56,6 +62,7 @@ class SparseDenseMatmulOp : public OpKernel
             context->eigen_device<Device>(), m, n, k, nnz, sparse_vec.data(),
             indices_vec.data(), dense_vec.data(), C_vec.data(), *transpose,
             temp.flat<int>().data());
+        //printf("sparse dense matmul end\n");
     }
 };
 
@@ -68,4 +75,12 @@ class SparseDenseMatmulOp : public OpKernel
                                  .HostMemory("transpose_sparse"), \
                             SparseDenseMatmulOp<GPUDevice>);
 REGISTER_GPU();
+#define REGISTER_XLA_GPU()                                            \
+    extern template struct SparseDenseMatmulFunctor<GPUDevice>;   \
+    REGISTER_KERNEL_BUILDER(Name("SparseDenseMatmul")             \
+                                 .Device("XLA_GPU")              \
+                                 .HostMemory("shape")             \
+                                 .HostMemory("transpose_sparse"), \
+                            SparseDenseMatmulOp<GPUDevice>);
+REGISTER_XLA_GPU();
 #endif

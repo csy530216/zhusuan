@@ -50,5 +50,7 @@ __global__ void resort(long long nnz, int *indices, const int *cols,
         auto id = indices[global_id];
         cols_cpy[global_id] = cols[id];
         vals_cpy[global_id] = vals[id];
+        //printf("%d, %d, %d, %f, %f\n", id, cols[id], cols_cpy[global_id], vals_cpy[global_id], vals[id]);
+        global_id += stride;
     }
 }

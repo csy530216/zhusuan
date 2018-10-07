@@ -11,21 +11,21 @@ using namespace tensorflow;
 
 using GPUDevice = Eigen::GpuDevice;
 
-const int sum_len = 256;
-const int work_per_thread = 4;
+const int sum_len = 1024;
+const int work_per_thread = 16;
 
 __global__ void SparseReduceSumCudaKernel(int numvals, const float *values,
                                           int *indices, float *sum_vec)
 {
-    __shared__ float sum[sum_len];
+    /*__shared__ float sum[sum_len];
     for (auto i = threadIdx.x; i < sum_len; i += blockDim.x)
         sum[i] = 0.0f;
-    __syncthreads();
+    __syncthreads();*/
     auto block_start_offset = blockIdx.x * sum_len;
     auto block_end_offset = min(numvals, block_start_offset + sum_len);
-    auto block_start_idx = indices[block_start_offset];
+    /*auto block_start_idx = indices[block_start_offset];
     auto block_end_idx = indices[block_end_offset - 1];
-    /*if (block_end_offset == numvals && threadIdx.x == 0)
+    if (block_end_offset == numvals && threadIdx.x == 0)
         printf("%d is the end row index.\n", block_end_idx);*/
     auto thread_start_offset =
         block_start_offset + threadIdx.x * work_per_thread;
@@ -42,8 +42,9 @@ __global__ void SparseReduceSumCudaKernel(int numvals, const float *values,
         {
             if (id > -1)
             {
-                auto id_offset = id - block_start_idx;
-                atomicAdd(sum + id_offset, val);
+                /*auto id_offset = id - block_start_idx;
+                atomicAdd(sum + id_offset, val);*/
+                atomicAdd(sum_vec + id, val);
             }
             id = id_temp;
             val = val_temp;
@@ -55,13 +56,16 @@ __global__ void SparseReduceSumCudaKernel(int numvals, const float *values,
     }
     if (id > -1)
     {
-        auto id_offset = id - block_start_idx;
-        atomicAdd(sum + id_offset, val);
+        /*auto id_offset = id - block_start_idx;
+        if (id_offset > sum_len)
+            printf("bound exceed!\n");
+        atomicAdd(sum + id_offset, val);*/
+        atomicAdd(sum_vec + id, val);
     }
-    __syncthreads();
+    /*__syncthreads();
     auto bound = block_end_idx - block_start_idx + 1;
-    /*if (threadIdx.x == 0)
-        printf("%d\n", bound);*/
+    if (threadIdx.x == 0)
+        printf("%d\n", bound);
     for (auto i = threadIdx.x; i < bound; i += blockDim.x)
     {
         if (i == 0 || i == bound - 1)
@@ -73,7 +77,7 @@ __global__ void SparseReduceSumCudaKernel(int numvals, const float *values,
             sum_vec[block_start_idx + i] = sum[i];
         }
         //atomicAdd(sum_vec + block_start_idx + i, sum[i]);
-    }
+    }*/
 }
 
 __global__ void zero(const long long num, float *sum)
@@ -127,6 +131,10 @@ void SparseReduceSumCudaFunctor<GPUDevice>::operator()(const GPUDevice &d,
             numvals, values, rowIndices, sum_vec);
         //std::cout << "cuda kernel src complete" << std::endl;
         //std::cout << cudaGetLastError() << std::endl;
+        /*cudaDeviceSynchronize();
+        auto error = cudaGetLastError();
+        if (error)
+        printf("1 srsc complete. %d\n", error);*/
     }else
     {
         int *alt_col = colIndices + numvals;
@@ -148,8 +156,12 @@ void SparseReduceSumCudaFunctor<GPUDevice>::operator()(const GPUDevice &d,
             cudaMalloc(&temp_store, temp_store_byte);
         cub::DeviceRadixSort::SortPairs(temp_store, temp_store_byte, keys,
                                         fvals, numvals);
+        /*cudaDeviceSynchronize();
+        printf("sort complete. %d\n", cudaGetLastError());*/
         SparseReduceSumCudaKernel<<<numblocks, sum_len / work_per_thread>>>(
             numvals, fvals.Current(), keys.Current(), sum_vec);
+        /*cudaDeviceSynchronize();
+        printf("0 srsc complete. %d\n", cudaGetLastError());*/
     }
 }
 

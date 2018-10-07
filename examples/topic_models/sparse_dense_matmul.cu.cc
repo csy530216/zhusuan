@@ -26,7 +26,7 @@ __global__ void matmul(long long m, long long n, long long k, long long nnz,
 
     //init out temp
     //out_temp[threadIdx.x] = 0;
-    float value = 0.0f;
+    //float value = 0.0f;
 
     //init sparse items
     auto sparse_start_id = blockIdx.x * tasks_per_block;
@@ -37,6 +37,10 @@ __global__ void matmul(long long m, long long n, long long k, long long nnz,
         sparse_val[threadIdx.x] = sparse[j];
         sparse_row[threadIdx.x] = rowIndices[j];
         sparse_col[threadIdx.x] = colIndices[j];
+        /*if (rowIndices[j] >= m)
+            printf("row error found!\n");
+        if (colIndices[j] >= n)
+            printf("col error found! %d, %d, %d\n", m, n, colIndices[j]);*/
     }
     __syncthreads();
 
@@ -48,20 +52,26 @@ __global__ void matmul(long long m, long long n, long long k, long long nnz,
         const int start_col = i * blockDim.x;
         auto end_col = min(blockDim.x, int(k - start_col));
         auto cur_row = -1;
+        auto value = 0.0f;
         for (auto j = 0; j < bound; ++j)
         {
             if (cur_row < sparse_row[j])
             {
                 if (cur_row >= 0)
                 {
-                    auto out_start = output + k * cur_row + start_col;
+                    auto out_start = output + int(k) * cur_row + start_col;
+                    /*if ((out_start - output) + threadIdx.x >= k * m)
+                        printf("access mem bigger than bound!\n");*/
                     if (threadIdx.x < end_col)
                         atomicAdd(out_start + threadIdx.x, value);
                     value = 0.0f;
                 }
                 cur_row = sparse_row[j];
             }
-            auto dense_start = dense + k * sparse_col[j] + start_col;
+            auto dense_start = dense + int(k) * sparse_col[j] + start_col;
+            /*if ((dense_start - dense) + threadIdx.x >= n * k)
+                printf("access dense matrix bigger than bound! %d\n", 
+                    (dense_start - dense) + threadIdx.x);*/
             if (threadIdx.x < end_col)
                 value += sparse_val[j] * dense_start[threadIdx.x];
         }
@@ -144,6 +154,8 @@ void SparseDenseMatmulFunctor<GPUDevice>::operator()(
         extractIndices<<<blocks, threads_pb>>>(nnz, indices, rowIndices,                                               colIndices);
         matmul<<<num_blocks, threads_per_block>>>(
             m, n, k, nnz, sparse, rowIndices, colIndices, dense, output);
+        //cudaDeviceSynchronize();
+        //printf("matmul without transpose complete, %d\n", cudaGetLastError());
     }
     else
     {
@@ -160,18 +172,29 @@ void SparseDenseMatmulFunctor<GPUDevice>::operator()(
         cub::DeviceRadixSort::SortPairs(temp_store, temp_store_byte, keys,
                                         idx, nnz);
         if (temp_store_byte <= nnz * sizeof(int) * 2)
+        {
+            //printf("mem allocated by tf used!\n");
             temp_store = (void *)(alt_idx + nnz);
+        }
         else
+        {
+            //printf("mem allocated by cuda used!\n");
             cudaMalloc(&temp_store, temp_store_byte);
+        }
         cub::DeviceRadixSort::SortPairs(temp_store, temp_store_byte, keys,
                                         idx, nnz);
+        //printf("sort complelte\n");
         int *col_cpy = alt_idx + nnz;
         float *val_cpy = reinterpret_cast<float *>(col_cpy + nnz);
         resort<<<blocks, threads_pb>>>(nnz, idx.Current(), colIndices, sparse,
                                        col_cpy, val_cpy);
+        cudaDeviceSynchronize();
+        //printf("sort idx complete, %d\n", cudaGetLastError());
         matmul<<<num_blocks, threads_per_block>>>(
             n, m, k, nnz, val_cpy, keys.Current(), col_cpy, dense,
             output);
+        cudaDeviceSynchronize();
+        //printf("matmul complelte, %d\n", cudaGetLastError());
     }
 }
 

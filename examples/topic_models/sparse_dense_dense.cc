@@ -43,6 +43,7 @@ class SparseDenseDenseOp : public OpKernel
 
     void Compute(OpKernelContext *context) override
     {
+        //printf("begin sparse densen dense...\n");
         // Grab the input tensor
         const Tensor &a = context->input(0);
         const Tensor &b = context->input(1);
@@ -104,4 +105,5 @@ class SparseDenseDenseOp : public OpKernel
 // Register the GPU kernels.
 #ifdef GOOGLE_CUDA
 REGISTER_KERNEL_BUILDER(Name("SparseDenseDense").Device(DEVICE_GPU), SparseDenseDenseOp);
+REGISTER_KERNEL_BUILDER(Name("SparseDenseDense").Device("XLA_GPU"), SparseDenseDenseOp);
 #endif // GOOGLE_CUDA

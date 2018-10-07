@@ -104,4 +104,13 @@ class SparseReduceSumCudaOp : public OpKernel
                                 .HostMemory("axis"),                \
                             SparseReduceSumCudaOp<GPUDevice>);
 REGISTER_GPU();
+#define REGISTER_XLA_GPU()                                               \
+    /* It's recommended to add the code below, but not essential. */ \
+    extern template struct SparseReduceSumCudaFunctor<GPUDevice>;       \
+    REGISTER_KERNEL_BUILDER(Name("SparseReduceSumCuda")                 \
+                                .Device("XLA_GPU")                  \
+                                .HostMemory("shape")                \
+                                .HostMemory("axis"),                \
+                            SparseReduceSumCudaOp<GPUDevice>);
+REGISTER_XLA_GPU();
 #endif // GOOGLE_CUDA

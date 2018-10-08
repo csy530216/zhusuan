@@ -21,7 +21,7 @@ import zhusuan as zs
 from examples import conf
 from examples.utils import dataset
 from sdd import *
-from src import *
+from srsc import *
 
 from scipy.sparse import csr_matrix
 
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     # np.random.seed(2345)
 
     # Load nips dataset
-    data_name = 'nips'
+    data_name = 'enron'
     print("Running sparse_lntm_mcem on dataset", data_name)
     if data_name == 'nips':
         n_train = 1200
@@ -155,7 +155,7 @@ if __name__ == "__main__":
         #log_px = tf.sparse_reduce_sum(log_pred, -1)
         log_px = tf.reduce_sum(
             tf.scatter_nd(x_indices, log_pred, dense_shape), -1)
-        log_px_cuda = src(log_pred, x_indices, dense_shape)
+        log_px_cuda = srsc(log_pred, x_indices, dense_shape)
         log_px = tf.reshape(log_px, [n_chains_ph, D_ph])
         log_px_cuda = tf.reshape(log_px_cuda, [n_chains_ph, D_ph])
         #log_px = tf.Print(log_px, [tf.reduce_sum(lp), tf.reduce_sum(lp2), tf.reduce_sum(log_px)], 'log_px')

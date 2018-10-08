@@ -14,6 +14,7 @@ def srsc(values, indices, shape, axis=1):
 def _sparse_reduce_sum_cuda_grad(op, grad):
     values = op.inputs[0]
     indices = op.inputs[1]
+    axis = op.inputs[3]
     print(values.get_shape(), indices.get_shape(), grad)
 #  shape = op.inputs[2]
 #  output_shape_kept_dims = math_ops.reduced_shape(shape, -1)
@@ -24,7 +25,9 @@ def _sparse_reduce_sum_cuda_grad(op, grad):
 #    reduced_indices = indices[:, :-1]
 #    grad_values = tf.gather_nd(grad, reduced_indices)
 # Or:
-    reduced_indices = indices[:, 0]
+    #reduced_indices = indices[:, 0]
+    g_axis = 0 if axis != 0 else 1
+    reduced_indices = indices[:, g_axis]
 #    grad_values = array_ops.gather(grad, reduced_indices)
     grad_values = tf.gather(grad, reduced_indices)
 

@@ -1,5 +1,7 @@
 #ifdef GOOGLE_CUDA
 #define EIGEN_USE_GPU
+#include <thrust/device_ptr.h>
+#include <thrust/fill.h>
 #include "sparse_reduce_sum_cuda.h"
 #include "util.cuh"
 #include "cub/cub.cuh"
@@ -90,6 +92,18 @@ __global__ void zero(const long long num, float *sum)
     }
 }
 
+__global__ void test_order(const long long nnz, const int *indices)
+{
+    if (threadIdx.x == 0)
+    {
+        for (auto i = 0; i < nnz - 1; ++i)
+        {
+            if (indices[i] > indices[i + 1])
+                printf("out of order found!\n");
+        }
+    }
+}
+
 template <typename GPUDevice>
 void SparseReduceSumCudaFunctor<GPUDevice>::operator()(const GPUDevice &d, 
                                                        int numvals, 
@@ -99,7 +113,9 @@ void SparseReduceSumCudaFunctor<GPUDevice>::operator()(const GPUDevice &d,
                                                        int *temp_buf, 
                                                        int axis)
 {
-    cudaMemset(sum_vec, 0, numvals * sizeof(float));
+    //cudaMemset(sum_vec, 0, numvals * sizeof(float));
+    thrust::device_ptr<float> out_ptr(sum_vec);
+    thrust::fill(out_ptr, out_ptr + numvals, 0.0f);
     //printf("sum vec initial complete\n");
     int *rowIndices = temp_buf;
     int *colIndices = temp_buf + numvals;
@@ -109,6 +125,7 @@ void SparseReduceSumCudaFunctor<GPUDevice>::operator()(const GPUDevice &d,
     const int blocks = (numvals + tasks_per_block - 1) / tasks_per_block;
     extractIndices<<<blocks, threads_per_block>>>(numvals, indices,
                                                   rowIndices, colIndices, tasks_per_thread);
+    //test_order<<<1, 32>>>(numvals, rowIndices);
     //printf("%d, %d\n", rowIndices[0], rowIndices[numvals - 1]);
     //printf("index extract complete %d\n", axis);
     auto numblocks = (numvals + sum_len - 1) / sum_len;

@@ -3,11 +3,11 @@ from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops, math_ops
 
 
-src_module = tf.load_op_library('./sparse_reduce_sum_cuda.so')
+srsc_module = tf.load_op_library('./sparse_reduce_sum_cuda.so')
 
 
 def srsc(values, indices, shape, axis=1):
-    return src_module.sparse_reduce_sum_cuda(values, indices, shape, axis)
+    return srsc_module.sparse_reduce_sum_cuda(values, indices, shape, axis)
 
 
 @ops.RegisterGradient("SparseReduceSumCuda")

@@ -147,24 +147,27 @@ if __name__ == "__main__":
         # print(row_idx.sorted())
         #log_pred = tf.SparseTensor(indices=x_indices, values=log_pred, dense_shape=dense_shape)
         #log_px = tf.sparse_reduce_sum(log_pred, -1)
+        log_px_cuda = srsc(log_pred, x_indices, dense_shape)
+        log_px_cuda = tf.reshape(log_px_cuda, [n_chains_ph, D_ph])
         #log_px = tf.reduce_sum(tf.scatter_nd(x_indices, log_pred, dense_shape), -1)
-        log_px = srsc(log_pred, x_indices, dense_shape)
-        log_px = tf.reshape(log_px, [n_chains_ph, D_ph])
+        #log_px = tf.reshape(log_px, [n_chains_ph, D_ph])
         #log_px = tf.Print(log_px, [tf.reduce_sum(lp), tf.reduce_sum(lp2), tf.reduce_sum(log_px)], 'log_px')
 
         # Shape:
         # log_p_eta, log_px: [n_chains, D]
         # log_p_beta: [K]
-        return log_p_eta, log_p_beta, log_px
+        return log_p_eta, log_p_beta, log_px_cuda
 
     def e_obj(observed):
-        log_p_eta, _, log_px = joint_obj(observed)
-        return log_p_eta + log_px
+        log_p_eta, _, log_px_cuda = joint_obj(observed)
+        return log_p_eta + log_px_cuda
 
-    lp_eta, lp_beta, lp_x = joint_obj(
+    lp_eta, lp_beta, lp_x_cuda = joint_obj(
         {'x_indices': x_indices, 'x_values': x_values, 'eta': eta, 'beta': beta})
-    log_likelihood = tf.reduce_sum(tf.reduce_mean(lp_x, axis=0), axis=0)
-    log_joint = tf.reduce_sum(lp_beta) + log_likelihood
+    #log_likelihood = tf.reduce_sum(tf.reduce_mean(lp_x, axis=0), axis=0)
+    log_likelihood_cuda = tf.reduce_sum(tf.reduce_mean(lp_x_cuda, axis=0),
+        axis=0)
+    log_joint = tf.reduce_sum(lp_beta) + log_likelihood_cuda
     sample_op, hmc_info = hmc.sample(
         e_obj, observed={'x_indices': x_indices, 'x_values': x_values, 'beta': beta}, latent={'eta': eta})
 
@@ -222,6 +225,7 @@ if __name__ == "__main__":
             X_train = X_train[perm, :]
             Eta = Eta[:, perm, :]
             lls = []
+            #lls_cuda = []
             accs = []
             for t in range(iters):
                 x_batch = X_train[t * D: (t + 1) * D]
@@ -257,7 +261,7 @@ if __name__ == "__main__":
 
                 # M step
                 _, ll = sess.run(
-                    [infer, log_likelihood],
+                    [infer, log_likelihood_cuda],
                     feed_dict={x_indices: x_batch_indices, x_values: x_batch_values,
                                eta_mean: Eta_mean,
                                eta_logstd: Eta_logstd,
@@ -266,6 +270,7 @@ if __name__ == "__main__":
                                D_ph: D,
                                n_chains_ph: n_chains})
                 lls.append(ll)
+                #lls_cuda.append(ll_cuda)
 
             # Update hyper-parameters
             Eta_mean = np.mean(Eta, axis=(0, 1))
@@ -275,6 +280,7 @@ if __name__ == "__main__":
             print('Epoch {} ({:.1f}s): Perplexity = {:.2f}, acc = {:.3f}, '
                   'eta mean = {:.2f}, logstd = {:.2f}'
                   .format(epoch, time_epoch, np.exp(-np.sum(lls) / T),
+                          #np.exp(-np.sum(lls_cuda) / T),
                           np.mean(accs), np.mean(Eta_mean),
                           np.mean(Eta_logstd)))
 

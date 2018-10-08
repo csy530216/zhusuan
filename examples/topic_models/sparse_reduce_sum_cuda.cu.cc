@@ -51,6 +51,10 @@ __global__ void SparseReduceSumCudaKernel(int numvals, const float *values,
             id = id_temp;
             val = val_temp;
         }
+        /*else if (id > id_temp)
+        {
+            printf("error out of order index found!\n");
+        }*/
         else
         {
             val += val_temp;
@@ -113,9 +117,8 @@ void SparseReduceSumCudaFunctor<GPUDevice>::operator()(const GPUDevice &d,
                                                        int *temp_buf, 
                                                        int axis)
 {
-    //cudaMemset(sum_vec, 0, numvals * sizeof(float));
-    thrust::device_ptr<float> out_ptr(sum_vec);
-    thrust::fill(out_ptr, out_ptr + numvals, 0.0f);
+    //thrust::device_ptr<float> out_ptr(sum_vec);
+    //thrust::fill(out_ptr, out_ptr + numvals, 0.0f);
     //printf("sum vec initial complete\n");
     int *rowIndices = temp_buf;
     int *colIndices = temp_buf + numvals;
@@ -129,8 +132,10 @@ void SparseReduceSumCudaFunctor<GPUDevice>::operator()(const GPUDevice &d,
     //printf("%d, %d\n", rowIndices[0], rowIndices[numvals - 1]);
     //printf("index extract complete %d\n", axis);
     auto numblocks = (numvals + sum_len - 1) / sum_len;
+    //printf("reduce args: %d, %d\n", numblocks, numvals);
     if (axis == 1 || axis == -1)
     {
+        cudaMemsetAsync(sum_vec, 0, shape[0] * sizeof(float));
         /*auto tpb = 64;
         auto nb = (shape[0] + tpb - 1) / tpb;
         zero<<<nb, tpb>>>(shape[0], sum_vec);*/
@@ -154,6 +159,8 @@ void SparseReduceSumCudaFunctor<GPUDevice>::operator()(const GPUDevice &d,
         printf("1 srsc complete. %d\n", error);*/
     }else
     {
+        cudaMemsetAsync(sum_vec, 0, shape[1] * sizeof(float));
+        //printf("call axis 0 reduce\n");
         int *alt_col = colIndices + numvals;
         //printf("begin copy\n");
         float *vals = (float *)(alt_col + numvals);

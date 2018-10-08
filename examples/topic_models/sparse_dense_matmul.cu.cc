@@ -188,12 +188,12 @@ void SparseDenseMatmulFunctor<GPUDevice>::operator()(
         float *val_cpy = reinterpret_cast<float *>(col_cpy + nnz);
         resort<<<blocks, threads_pb>>>(nnz, idx.Current(), colIndices, sparse,
                                        col_cpy, val_cpy);
-        cudaDeviceSynchronize();
+        //cudaDeviceSynchronize();
         //printf("sort idx complete, %d\n", cudaGetLastError());
         matmul<<<num_blocks, threads_per_block>>>(
             n, m, k, nnz, val_cpy, keys.Current(), col_cpy, dense,
             output);
-        cudaDeviceSynchronize();
+        //cudaDeviceSynchronize();
         //printf("matmul complelte, %d\n", cudaGetLastError());
     }
 }

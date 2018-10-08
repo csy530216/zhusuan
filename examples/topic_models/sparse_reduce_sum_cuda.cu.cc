@@ -1,7 +1,5 @@
 #ifdef GOOGLE_CUDA
 #define EIGEN_USE_GPU
-#include <thrust/device_ptr.h>
-#include <thrust/fill.h>
 #include "sparse_reduce_sum_cuda.h"
 #include "util.cuh"
 #include "cub/cub.cuh"
@@ -117,9 +115,6 @@ void SparseReduceSumCudaFunctor<GPUDevice>::operator()(const GPUDevice &d,
                                                        int *temp_buf, 
                                                        int axis)
 {
-    //thrust::device_ptr<float> out_ptr(sum_vec);
-    //thrust::fill(out_ptr, out_ptr + numvals, 0.0f);
-    //printf("sum vec initial complete\n");
     int *rowIndices = temp_buf;
     int *colIndices = temp_buf + numvals;
     const int threads_per_block = 256;
@@ -135,7 +130,7 @@ void SparseReduceSumCudaFunctor<GPUDevice>::operator()(const GPUDevice &d,
     //printf("reduce args: %d, %d\n", numblocks, numvals);
     if (axis == 1 || axis == -1)
     {
-        cudaMemsetAsync(sum_vec, 0, shape[0] * sizeof(float));
+        //cudaMemsetAsync(sum_vec, 0, shape[0] * sizeof(float));
         /*auto tpb = 64;
         auto nb = (shape[0] + tpb - 1) / tpb;
         zero<<<nb, tpb>>>(shape[0], sum_vec);*/
@@ -159,7 +154,7 @@ void SparseReduceSumCudaFunctor<GPUDevice>::operator()(const GPUDevice &d,
         printf("1 srsc complete. %d\n", error);*/
     }else
     {
-        cudaMemsetAsync(sum_vec, 0, shape[1] * sizeof(float));
+        //cudaMemsetAsync(sum_vec, 0, shape[1] * sizeof(float));
         //printf("call axis 0 reduce\n");
         int *alt_col = colIndices + numvals;
         //printf("begin copy\n");

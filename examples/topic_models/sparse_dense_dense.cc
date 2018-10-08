@@ -57,10 +57,10 @@ class SparseDenseDenseOp : public OpKernel
 
         const uint64 K = a.dim_size(1);
 
-        auto am = a.flat<float>();
-        auto bm = b.flat<float>();
-        auto Pm = P->flat<float>();
-        auto indices_m = indices.flat<int64>();
+        auto am = a.flat<float>().data();
+        auto bm = b.flat<float>().data();
+        auto Pm = P->flat<float>().data();
+        auto indices_m = indices.flat<int64>().data();
 
         // collect data to make C++/CUDA debug more convenient.
         /*{
@@ -95,10 +95,7 @@ class SparseDenseDenseOp : public OpKernel
             std::cout << "data copy complete." << std::endl;
         }*/
 
-        SparseDenseDenseKernelLauncher(
-            K, nnz,
-            am.data(), bm.data(),
-            indices_m.data(), Pm.data());
+        SparseDenseDenseKernelLauncher(K, nnz, am, bm, indices_m, Pm);
     }
 };
 

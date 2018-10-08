@@ -1,3 +1,4 @@
+#include <cuda_runtime.h>
 #include "sparse_dense_matmul.h"
 
 using namespace tensorflow;
@@ -33,13 +34,13 @@ class SparseDenseMatmulOp : public OpKernel
         const bool *transpose = transpose_sparse.flat<bool>().data();
 
         const int64 nnz = sparse.dim_size(0);
-        auto sparse_vec = sparse.flat<float>();
-        auto indices_vec = indices.flat<int64>();
-        auto shape_vec = shape.flat<int64>();
-        auto dense_vec = dense.flat<float>();
+        auto sparse_vec = sparse.flat<float>().data();
+        auto indices_vec = indices.flat<int64>().data();
+        auto shape_vec = shape.flat<int64>().data();
+        auto dense_vec = dense.flat<float>().data();
 
-        const int64 m = shape_vec(0);
-        const int64 n = shape_vec(1);
+        const int64 m = shape_vec[0];
+        const int64 n = shape_vec[1];
         const int64 k = dense.dim_size(1);
 
         /*if (*transpose)
@@ -52,16 +53,16 @@ class SparseDenseMatmulOp : public OpKernel
         OP_REQUIRES_OK(context,
                        context->allocate_output(0,
                                                 TensorShape({j, k}), &C));
-        auto C_vec = C->flat<float>();
+        auto C_vec = C->flat<float>().data();
+        cudaMemsetAsync(C_vec, 0, j * k * sizeof(float));
         Tensor temp;
         OP_REQUIRES_OK(context,
                        context->allocate_temp(DataType::DT_INT32,
                                               TensorShape({nnz * 7}),
                                               &temp));
         SparseDenseMatmulFunctor<Device>()(
-            context->eigen_device<Device>(), m, n, k, nnz, sparse_vec.data(),
-            indices_vec.data(), dense_vec.data(), C_vec.data(), *transpose,
-            temp.flat<int>().data());
+            context->eigen_device<Device>(), m, n, k, nnz, sparse_vec,
+            indices_vec, dense_vec, C_vec, *transpose, temp.flat<int>().data());
         //printf("sparse dense matmul end\n");
     }
 };

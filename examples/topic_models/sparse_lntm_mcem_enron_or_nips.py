@@ -54,7 +54,7 @@ if __name__ == "__main__":
     # np.random.seed(2345)
 
     # Load nips dataset
-    data_name = 'enron'
+    data_name = 'nips'
     print("Running sparse_lntm_mcem on dataset", data_name)
     if data_name == 'nips':
         n_train = 1200

@@ -139,8 +139,8 @@ void SparseDenseMatmulFunctor<GPUDevice>::operator()(
     const float *sparse, const long long *indices, const float *dense,
     float *output, bool transpose_sparse, int *tempbuf)
 {
-    const auto j = transpose_sparse ? n : m;
-    cudaMemset(output, 0, j * k * sizeof(float));
+    //const auto j = transpose_sparse ? n : m;
+    //cudaMemset(output, 0, j * k * sizeof(float));
     //printf("%d, %d, %d\n", m, n, k);
     int *rowIndices = tempbuf;
     int *colIndices = tempbuf + nnz;

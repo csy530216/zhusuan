@@ -1,7 +1,7 @@
 #include "sparse_reduce_sum_cuda.h"
+#include <cuda_runtime.h>
 //#include "tensorflow/core/framework/shape_inference.h"
 //#include "tensorflow/core/framework/tensor_shape.h"
-//#include "tensorflow/core/kernels/fill_functor.h"
 
 using namespace tensorflow; // NOLINT(build/namespaces)
 
@@ -44,7 +44,7 @@ class SparseReduceSumCudaOp : public OpKernel
         std::cout << inds.NumElements() << std::endl;*/
 
         //std::cout << "the shape: " << std::endl;
-        auto vec = shape_input.flat<int64>();
+        auto vec = shape_input.flat<int64>().data();
         //auto vec = shape_input.vec<int64>();
         //printf("the shape: %d", vec(0));
         //std::cout << vec(0) << std::endl;
@@ -55,22 +55,20 @@ class SparseReduceSumCudaOp : public OpKernel
         TensorShape shape;
         if (*axis_ptr == 1 || *axis_ptr == -1)
             OP_REQUIRES_OK(context,
-                           TensorShapeUtils::MakeShape(vec.data(), 1, &shape));
+                           TensorShapeUtils::MakeShape(vec, 1, &shape));
         else
             OP_REQUIRES_OK(context,
-                           TensorShapeUtils::MakeShape(vec.data() + 1, 1,
-                                                       &shape));
+                           TensorShapeUtils::MakeShape(vec + 1, 1, &shape));
         //std::cout << "shape creation complete." << std::endl;
 
         Tensor *output = NULL;
         OP_REQUIRES_OK(context,
                        context->allocate_output(0, shape, &output));
-        //functor::SetZeroFunctor<Device, float> fill;
-        //fill(context->eigen_device<Device>(), output->flat<float>());
 
-        auto values = vals.flat<float>();
-        auto indices = inds.flat<int64>();
-        auto out = output->flat<float>();
+        auto values = vals.flat<float>().data();
+        auto indices = inds.flat<int64>().data();
+        auto out = output->flat<float>().data();
+        cudaMemsetAsync(out, 0, shape.dim_size(0) * sizeof(float));
         /*std::cout << out.data() << " " << values.data() << " "
                   << vec.data() << std::endl;*/
         int *temp_mem = NULL;
@@ -87,9 +85,8 @@ class SparseReduceSumCudaOp : public OpKernel
         //std::cout << "srsc initial complete" << std::endl;
 
         SparseReduceSumCudaFunctor<Device>()(context->eigen_device<Device>(),
-                                          num_values, values.data(),
-                                          indices.data(), vec.data(), 
-                                          out.data(), temp_mem, *axis_ptr);
+                                          num_values, values, indices, 
+                                          vec, out, temp_mem, *axis_ptr);
     }
 };
 

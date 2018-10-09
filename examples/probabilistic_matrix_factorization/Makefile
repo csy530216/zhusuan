@@ -2,13 +2,13 @@ TF_CFLAGS=$(shell python -c 'import tensorflow as tf; print(" ".join(tf.sysconfi
 TF_LFLAGS=$(shell python -c 'import tensorflow as tf; print(" ".join(tf.sysconfig.get_link_flags()))')
 CUDA_FLAGS=-L$(CUDA_ROOT)/lib64
 
-all: sparse_dense_dense.so sparse_reduce_cols.so
+all: sparse_dense_dense.so sparse_reduce_sum_cuda.so sparse_dense_matmul.so
 
 %.cu.o: %.cu.cc
-	nvcc -std=c++11 -c -o $@ $^ $(TF_CFLAGS) -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC
+	nvcc -std=c++11 -c -o $@ $^ -I/opt/cuda/include  -I../../../cub-1.8.0 $(TF_CFLAGS)  -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC --expt-relaxed-constexpr -DNDEBUG
 
 %.so: %.cc %.cu.o
-	g++ -std=c++11 -shared -o $@ $^ $(TF_CFLAGS) -fPIC $(CUDA_FLAGS) -lcudart $(TF_LFLAGS) -D GOOGLE_CUDA=1
+	g++ -std=c++11 -shared -o $@ $^ $(TF_CFLAGS) -fPIC $(CUDA_FLAGS) -lcudart -lcusparse -lcublas $(TF_LFLAGS) -D GOOGLE_CUDA=1
 
 clean:
 	#-rm *.o

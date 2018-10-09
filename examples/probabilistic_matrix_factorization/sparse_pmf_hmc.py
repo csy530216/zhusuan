@@ -12,7 +12,7 @@ import tensorflow as tf
 import numpy as np
 import zhusuan as zs
 from sdd import *
-from src import *
+from srsc import *
 from scipy.sparse import csr_matrix
 
 from examples import conf
@@ -101,21 +101,15 @@ def main():
     def log_joint(observed):
         model, _ = pmf(observed, N, M, D, K, alpha_u, alpha_v, alpha_pred)
         log_pu, log_pv, log_pr = model.local_log_prob(['u', 'v', 'r_values'])
-        # Following code is slow for the use of sparse_reduce_sum.
-        # Replace it with following commented code is not equivalent but can avoid using sparse_reduce_sum.
         # log_pu = tf.reduce_sum(log_pu)
         # log_pv = tf.reduce_sum(log_pv)
         # log_pr = tf.reduce_sum(log_pr)
         # return log_pu + log_pr, log_pv + log_pr
-
-        # Why not use scatter_nd? Because dense_shape [K*N, K*M] is too large.
-        # The best way is to use src after it supports reduce sum on axis 0.
         r_indices = observed['r_indices']
         dense_shape = [K*N, K*M]
-        log_pr_dense = tf.SparseTensor(r_indices, log_pr, dense_shape)
-        log_pr_u = tf.sparse_reduce_sum(log_pr_dense, -1)
+        log_pr_u = srsc(log_pr, r_indices, dense_shape, -1)
         log_pr_u = tf.reshape(log_pr_u, [K, N])
-        log_pr_v = tf.sparse_reduce_sum(log_pr_dense, 0)
+        log_pr_v = srsc(log_pr, r_indices, dense_shape, 0)
         log_pr_v = tf.reshape(log_pr_v, [K, M])
         return log_pu + log_pr_u, log_pv + log_pr_v
 
@@ -140,9 +134,6 @@ def main():
         latent={'v': V})
 
     with tf.Session() as sess:
-        from tensorflow.python.client import timeline
-        options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        run_metadata = tf.RunMetadata()
         sess.run(tf.global_variables_initializer())
 
         for epoch in range(1, epochs + 1):
@@ -150,9 +141,9 @@ def main():
             feed_dict = {r_indices: R_train_indices,
                          r_values: R_train_values}
             _, acc_u = sess.run([sample_u_op, sample_u_info.acceptance_rate],
-                                feed_dict=feed_dict, options=options, run_metadata=run_metadata)
+                                feed_dict=feed_dict)
             _, acc_v = sess.run([sample_v_op, sample_v_info.acceptance_rate],
-                                feed_dict=feed_dict, options=options, run_metadata=run_metadata)
+                                feed_dict=feed_dict)
             epoch_time += time.time()
             time_train = -time.time()
             train_rmse = sess.run(rmse, feed_dict=feed_dict)
@@ -160,13 +151,6 @@ def main():
 
             print('Epoch {}({:.1f}s): rmse ({:.1f}s) = {}'
                   .format(epoch, epoch_time, time_train, train_rmse))
-
-            if epoch == 3:
-                # Create the Timeline object, and write it to a json file
-                fetched_timeline = timeline.Timeline(run_metadata.step_stats)
-                chrome_trace = fetched_timeline.generate_chrome_trace_format()
-                with open('sparsepmf.json', 'w') as f:
-                    f.write(chrome_trace)
 
             if epoch % valid_freq == 0:
                 valid_rmse = sess.run(rmse, feed_dict={r_indices: R_valid_indices, r_values: R_valid_values})

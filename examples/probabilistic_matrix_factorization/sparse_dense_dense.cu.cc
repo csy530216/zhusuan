@@ -149,6 +149,13 @@ void SparseDenseDenseKernelLauncher(int ncols, int nnz,
       num_blocks, threads_per_block, ncols * rows * sizeof(float)>>>(
       ncols, nnz, A, B, indices, P);
   //cout << "Finished kernel" << endl;
+  /*cudaDeviceSynchronize();
+  auto error = cudaGetLastError();
+  if (error)
+  {
+    printf("error occurred: %d\n", error);
+  }
+  printf("OK!\n");*/
 }
 
 #endif

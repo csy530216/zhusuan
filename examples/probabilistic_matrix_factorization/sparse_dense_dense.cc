@@ -43,6 +43,7 @@ class SparseDenseDenseOp : public OpKernel
 
     void Compute(OpKernelContext *context) override
     {
+        //printf("begin sparse densen dense...\n");
         // Grab the input tensor
         const Tensor &a = context->input(0);
         const Tensor &b = context->input(1);
@@ -56,10 +57,10 @@ class SparseDenseDenseOp : public OpKernel
 
         const uint64 K = a.dim_size(1);
 
-        auto am = a.flat<float>();
-        auto bm = b.flat<float>();
-        auto Pm = P->flat<float>();
-        auto indices_m = indices.flat<int64>();
+        auto am = a.flat<float>().data();
+        auto bm = b.flat<float>().data();
+        auto Pm = P->flat<float>().data();
+        auto indices_m = indices.flat<int64>().data();
 
         // collect data to make C++/CUDA debug more convenient.
         /*{
@@ -94,14 +95,12 @@ class SparseDenseDenseOp : public OpKernel
             std::cout << "data copy complete." << std::endl;
         }*/
 
-        SparseDenseDenseKernelLauncher(
-            K, nnz,
-            am.data(), bm.data(),
-            indices_m.data(), Pm.data());
+        SparseDenseDenseKernelLauncher(K, nnz, am, bm, indices_m, Pm);
     }
 };
 
 // Register the GPU kernels.
 #ifdef GOOGLE_CUDA
 REGISTER_KERNEL_BUILDER(Name("SparseDenseDense").Device(DEVICE_GPU), SparseDenseDenseOp);
+REGISTER_KERNEL_BUILDER(Name("SparseDenseDense").Device("XLA_GPU"), SparseDenseDenseOp);
 #endif // GOOGLE_CUDA
